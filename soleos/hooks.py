@@ -1,0 +1,6 @@
+app_name = "soleos"
+app_title = "Soleos"
+app_publisher = "Soleos"
+app_description = "Soleos App"
+app_email = "admin@soleosenergy.com"
+app_license = "mit"
