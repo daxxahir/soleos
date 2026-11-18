@@ -652,8 +652,9 @@ def cleanup_other_workspaces():
 
 
 if __name__ == "__main__":
-    import os
-    os.chdir('/home/soleos/frappe-bench/sites')
-    frappe.init("soleos.localhost")
+    import os, sys
+    sys.path.insert(0, "/home/soleos/frappe-bench/apps/soleos")
+    os.chdir("/home/soleos/frappe-bench/sites")
+    frappe.init("soleos.localhost", sites_path="/home/soleos/frappe-bench/sites")
     frappe.connect()
     setup_all()
