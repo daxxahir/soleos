@@ -10,6 +10,7 @@ def setup_all():
     setup_activity_workflows()
     setup_activities_workspace()
     setup_sidebar_views()
+    setup_crm_activities_scripts()
     cleanup_other_workspaces()
     frappe.clear_cache()
     frappe.logger("soleos").info("Soleos App Setup completed.")
@@ -90,6 +91,31 @@ def setup_activity_workflows():
         "CRM Call Log", "status", "options", call_statuses, "Select", for_doctype=False, validate_fields_for_doctype=False
     )
 
+    # 3. CRM Task Field Labels (Zoho Bigin field naming)
+    make_property_setter(
+        "CRM Task", "title", "label", "Task Name", "Data", for_doctype=False, validate_fields_for_doctype=False
+    )
+    make_property_setter(
+        "CRM Task", "assigned_to", "label", "Task Owner", "Data", for_doctype=False, validate_fields_for_doctype=False
+    )
+    make_property_setter(
+        "CRM Task", "reference_docname", "label", "Related To", "Data", for_doctype=False, validate_fields_for_doctype=False
+    )
+    make_property_setter(
+        "CRM Task", "reference_doctype", "label", "Related To Type", "Data", for_doctype=False, validate_fields_for_doctype=False
+    )
+
+    # 4. CRM Call Log Field Labels (Zoho Bigin field naming)
+    make_property_setter(
+        "CRM Call Log", "title", "label", "Subject", "Data", for_doctype=False, validate_fields_for_doctype=False
+    )
+    make_property_setter(
+        "CRM Call Log", "assigned_to", "label", "Call Owner", "Data", for_doctype=False, validate_fields_for_doctype=False
+    )
+    make_property_setter(
+        "CRM Call Log", "reference_docname", "label", "Related To", "Data", for_doctype=False, validate_fields_for_doctype=False
+    )
+
 
 def setup_sidebar_views():
     """
@@ -136,8 +162,16 @@ def setup_sidebar_views():
         p_doc = frappe.get_doc(pipeline_data)
         p_doc.insert(ignore_permissions=True)
 
-    # 3. Ensure single 'Activities' view is pinned in the sidebar
+    # 3. Ensure single 'Activities' view is pinned in the sidebar with Zoho Bigin columns
     activities_view_name = frappe.db.exists("CRM View Settings", {"label": "Activities", "dt": "CRM Task"})
+    zoho_columns = [
+        {"label": "Task Name", "type": "Data", "key": "title", "width": "16rem"},
+        {"label": "Due Date", "type": "Datetime", "key": "due_date", "width": "10rem"},
+        {"label": "Status", "type": "Select", "key": "status", "width": "8rem"},
+        {"label": "Priority", "type": "Select", "key": "priority", "width": "8rem"},
+        {"label": "Related To", "type": "Dynamic Link", "key": "reference_docname", "width": "12rem"},
+        {"label": "Task Owner", "type": "Link", "key": "assigned_to", "width": "12rem"},
+    ]
     act_data = {
         "doctype": "CRM View Settings",
         "label": "Activities",
@@ -152,7 +186,9 @@ def setup_sidebar_views():
         "user": "",
         "order_by": "due_date asc",
         "filters": "{}",
-        "load_default_columns": 1,
+        "load_default_columns": 0,
+        "columns": json.dumps(zoho_columns),
+        "rows": json.dumps(["name", "title", "due_date", "status", "priority", "reference_docname", "reference_doctype", "assigned_to", "modified"]),
     }
     if activities_view_name:
         act_doc = frappe.get_doc("CRM View Settings", activities_view_name)
@@ -346,6 +382,244 @@ def setup_activities_workspace():
         for l in links:
             doc.append("links", l)
         doc.insert(ignore_permissions=True)
+
+
+def setup_crm_activities_scripts():
+    """
+    Creates CRM Form Scripts for CRM Task and CRM Call Log (List view) to inject:
+    1. The Zoho Bigin Activities Taskbar (Calendar, Tasks, Events, Calls) above the list.
+    2. Header action buttons for Calendar, Events, and Calls beside Create.
+    3. An integrated FullCalendar popup modal so Calendar opens right in CRM without leaving.
+    """
+    frappe.logger("soleos").info("Configuring CRM Activities Scripts...")
+
+    task_script = """function setupList(obj) {
+  function renderTaskbar() {
+    let container = document.getElementById('zoho-activities-taskbar');
+    if (!container) {
+      let target = document.querySelector('.layout-header') || document.querySelector('[class*="LayoutHeader"]');
+      if (!target) return;
+
+      container = document.createElement('div');
+      container.id = 'zoho-activities-taskbar';
+      container.style.cssText = 'display:flex;align-items:center;gap:12px;padding:8px 20px;border-bottom:1px solid #e5e7eb;background:#ffffff;font-size:13px;font-weight:500;z-index:20;position:relative;';
+
+      container.innerHTML = `
+        <div id="act-tab-calendar" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;color:#4b5563;transition:all 0.2s;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
+          <span>📅</span> <span style="font-weight:500;">Calendar</span>
+        </div>
+        <div id="act-tab-tasks" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;color:#16a34a;background-color:#f0fdf4;border:1px solid #bbf7d0;font-weight:600;">
+          <span>📋</span> <span>Tasks</span>
+        </div>
+        <div id="act-tab-events" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;color:#4b5563;transition:all 0.2s;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
+          <span>🤝</span> <span style="font-weight:500;">Events</span>
+        </div>
+        <div id="act-tab-calls" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;color:#4b5563;transition:all 0.2s;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
+          <span>📞</span> <span style="font-weight:500;">Calls</span>
+        </div>
+      `;
+
+      if (target.parentNode) {
+        target.parentNode.insertBefore(container, target.nextSibling);
+      }
+
+      let calBtn = document.getElementById('act-tab-calendar');
+      if (calBtn) calBtn.onclick = () => openCalendarModal();
+
+      let evBtn = document.getElementById('act-tab-events');
+      if (evBtn) evBtn.onclick = () => window.open('/app/event', '_blank');
+
+      let callBtn = document.getElementById('act-tab-calls');
+      if (callBtn) callBtn.onclick = () => {
+        if (obj && obj.router) obj.router.push({ name: 'Call Logs' });
+        else window.location.href = '/crm/call-logs';
+      };
+    }
+  }
+
+  function openCalendarModal() {
+    let existing = document.getElementById('crm-calendar-modal');
+    if (existing) existing.remove();
+
+    let modal = document.createElement('div');
+    modal.id = 'crm-calendar-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px);';
+    modal.innerHTML = `
+      <div style="background:#ffffff;width:92%;height:88%;border-radius:12px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.3);display:flex;flex-direction:column;overflow:hidden;border:1px solid #e5e7eb;">
+        <div style="padding:12px 20px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;background:#f9fafb;">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;color:#111827;">
+            <span>📅</span> Activities Calendar (Month / Week / Day)
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <a href="/app/event/view/calendar" target="_blank" style="padding:6px 12px;border-radius:6px;background:#e5e7eb;color:#374151;text-decoration:none;font-size:13px;font-weight:500;">Open in Desk ↗</a>
+            <button id="close-cal-modal" style="border:none;background:#fee2e2;color:#991b1b;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">✕ Close</button>
+          </div>
+        </div>
+        <div style="flex:1;position:relative;">
+          <iframe src="/app/event/view/calendar" style="width:100%;height:100%;border:none;"></iframe>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    document.getElementById('close-cal-modal').onclick = () => modal.remove();
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+  }
+
+  setTimeout(renderTaskbar, 200);
+  let timer = setInterval(renderTaskbar, 800);
+  setTimeout(() => clearInterval(timer), 12000);
+
+  return {
+    actions: [
+      {
+        label: 'Calendar',
+        icon: 'lucide-calendar',
+        onClick: () => openCalendarModal()
+      },
+      {
+        label: 'Events',
+        icon: 'lucide-calendar-days',
+        onClick: () => window.open('/app/event', '_blank')
+      },
+      {
+        label: 'Calls',
+        icon: 'lucide-phone',
+        onClick: () => {
+          if (obj && obj.router) obj.router.push({ name: 'Call Logs' });
+          else window.location.href = '/crm/call-logs';
+        }
+      }
+    ],
+    bulk_actions: []
+  };
+}"""
+
+    call_script = """function setupList(obj) {
+  function renderTaskbar() {
+    let container = document.getElementById('zoho-activities-taskbar');
+    if (!container) {
+      let target = document.querySelector('.layout-header') || document.querySelector('[class*="LayoutHeader"]');
+      if (!target) return;
+
+      container = document.createElement('div');
+      container.id = 'zoho-activities-taskbar';
+      container.style.cssText = 'display:flex;align-items:center;gap:12px;padding:8px 20px;border-bottom:1px solid #e5e7eb;background:#ffffff;font-size:13px;font-weight:500;z-index:20;position:relative;';
+
+      container.innerHTML = `
+        <div id="act-tab-calendar" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;color:#4b5563;transition:all 0.2s;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
+          <span>📅</span> <span style="font-weight:500;">Calendar</span>
+        </div>
+        <div id="act-tab-tasks" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;color:#4b5563;transition:all 0.2s;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
+          <span>📋</span> <span style="font-weight:500;">Tasks</span>
+        </div>
+        <div id="act-tab-events" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;color:#4b5563;transition:all 0.2s;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
+          <span>🤝</span> <span style="font-weight:500;">Events</span>
+        </div>
+        <div id="act-tab-calls" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;color:#16a34a;background-color:#f0fdf4;border:1px solid #bbf7d0;font-weight:600;">
+          <span>📞</span> <span>Calls</span>
+        </div>
+      `;
+
+      if (target.parentNode) {
+        target.parentNode.insertBefore(container, target.nextSibling);
+      }
+
+      let calBtn = document.getElementById('act-tab-calendar');
+      if (calBtn) calBtn.onclick = () => openCalendarModal();
+
+      let taskBtn = document.getElementById('act-tab-tasks');
+      if (taskBtn) taskBtn.onclick = () => {
+        if (obj && obj.router) obj.router.push({ name: 'Tasks' });
+        else window.location.href = '/crm/tasks';
+      };
+
+      let evBtn = document.getElementById('act-tab-events');
+      if (evBtn) evBtn.onclick = () => window.open('/app/event', '_blank');
+    }
+  }
+
+  function openCalendarModal() {
+    let existing = document.getElementById('crm-calendar-modal');
+    if (existing) existing.remove();
+
+    let modal = document.createElement('div');
+    modal.id = 'crm-calendar-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px);';
+    modal.innerHTML = `
+      <div style="background:#ffffff;width:92%;height:88%;border-radius:12px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.3);display:flex;flex-direction:column;overflow:hidden;border:1px solid #e5e7eb;">
+        <div style="padding:12px 20px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;background:#f9fafb;">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;color:#111827;">
+            <span>📅</span> Activities Calendar (Month / Week / Day)
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <a href="/app/event/view/calendar" target="_blank" style="padding:6px 12px;border-radius:6px;background:#e5e7eb;color:#374151;text-decoration:none;font-size:13px;font-weight:500;">Open in Desk ↗</a>
+            <button id="close-cal-modal" style="border:none;background:#fee2e2;color:#991b1b;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">✕ Close</button>
+          </div>
+        </div>
+        <div style="flex:1;position:relative;">
+          <iframe src="/app/event/view/calendar" style="width:100%;height:100%;border:none;"></iframe>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    document.getElementById('close-cal-modal').onclick = () => modal.remove();
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+  }
+
+  setTimeout(renderTaskbar, 200);
+  let timer = setInterval(renderTaskbar, 800);
+  setTimeout(() => clearInterval(timer), 12000);
+
+  return {
+    actions: [
+      {
+        label: 'Calendar',
+        icon: 'lucide-calendar',
+        onClick: () => openCalendarModal()
+      },
+      {
+        label: 'Tasks',
+        icon: 'lucide-check-square',
+        onClick: () => {
+          if (obj && obj.router) obj.router.push({ name: 'Tasks' });
+          else window.location.href = '/crm/tasks';
+        }
+      },
+      {
+        label: 'Events',
+        icon: 'lucide-calendar-days',
+        onClick: () => window.open('/app/event', '_blank')
+      }
+    ],
+    bulk_actions: []
+  };
+}"""
+
+    # Upsert scripts
+    scripts = [
+        {"name": "Activities Taskbar for CRM Task", "dt": "CRM Task", "script": task_script},
+        {"name": "Activities Taskbar for CRM Call Log", "dt": "CRM Call Log", "script": call_script},
+    ]
+
+    for s in scripts:
+        if frappe.db.exists("CRM Form Script", s["name"]):
+            d = frappe.get_doc("CRM Form Script", s["name"])
+            d.script = s["script"]
+            d.dt = s["dt"]
+            d.view = "List"
+            d.enabled = 1
+            d.save(ignore_permissions=True)
+        else:
+            d = frappe.get_doc({
+                "doctype": "CRM Form Script",
+                "name": s["name"],
+                "dt": s["dt"],
+                "view": "List",
+                "enabled": 1,
+                "is_standard": 0,
+                "script": s["script"]
+            })
+            d.insert(ignore_permissions=True)
 
 
 def cleanup_other_workspaces():
