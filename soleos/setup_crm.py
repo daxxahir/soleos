@@ -9,8 +9,8 @@ def setup_all():
     setup_bigin_pipeline()
     setup_activity_workflows()
     setup_activities_workspace()
+    setup_sidebar_views()
     cleanup_other_workspaces()
-    remove_unwanted_sidebar_views()
     frappe.clear_cache()
     frappe.logger("soleos").info("Soleos App Setup completed.")
 
@@ -91,17 +91,76 @@ def setup_activity_workflows():
     )
 
 
-def remove_unwanted_sidebar_views():
+def setup_sidebar_views():
     """
-    Ensures separate activity options (Tasks, Calls, Notes, Activities) do NOT
-    show up as separate pinned views or loose links in the sidebar.
+    Adds single 'Activities' and 'Pipelines' entries to CRM View Settings (public/pinned for sidebar).
+    Removes any separate/individual views for Calls, Notes, Tasks, or Calendar so the sidebar stays clean.
     """
-    unwanted_labels = ["Activities", "Calls", "Notes", "Activities: Tasks", "Activities: Calls", "Activities: Notes"]
+    frappe.logger("soleos").info("Configuring sidebar views in CRM View Settings...")
+
+    # 1. Remove any loose/individual views
+    unwanted_labels = ["Calls", "Notes", "Activities: Tasks", "Activities: Calls", "Activities: Notes"]
     for lbl in unwanted_labels:
         views = frappe.get_all("CRM View Settings", filters={"label": lbl})
         for v in views:
             frappe.delete_doc("CRM View Settings", v.name, force=True)
-            frappe.logger("soleos").info(f"Removed sidebar view '{lbl}'.")
+
+    # 2. Ensure 'Pipelines' view is pinned in the sidebar
+    stages = ["Qualification", "Needs Analysis", "Proposal/Price Quote", "Negotiation/Review", "Closed Won", "Closed Lost"]
+    kanban_cols = [{"name": s, "color": "gray"} for s in stages]
+    pipeline_view_name = frappe.db.exists("CRM View Settings", {"label": "Pipelines", "dt": "CRM Deal"})
+    pipeline_data = {
+        "doctype": "CRM View Settings",
+        "label": "Pipelines",
+        "dt": "CRM Deal",
+        "route_name": "Deals",
+        "type": "kanban",
+        "pinned": 1,
+        "public": 1,
+        "is_default": 1,
+        "is_standard": 1,
+        "user": "",
+        "column_field": "status",
+        "title_field": "organization",
+        "columns": json.dumps([{"name": s} for s in stages]),
+        "kanban_columns": json.dumps(kanban_cols),
+        "kanban_fields": json.dumps(["annual_revenue", "email", "mobile_no", "deal_owner", "modified"]),
+        "order_by": "modified desc",
+        "filters": "{}",
+    }
+    if pipeline_view_name:
+        p_doc = frappe.get_doc("CRM View Settings", pipeline_view_name)
+        p_doc.update(pipeline_data)
+        p_doc.save(ignore_permissions=True)
+    else:
+        p_doc = frappe.get_doc(pipeline_data)
+        p_doc.insert(ignore_permissions=True)
+
+    # 3. Ensure single 'Activities' view is pinned in the sidebar
+    activities_view_name = frappe.db.exists("CRM View Settings", {"label": "Activities", "dt": "CRM Task"})
+    act_data = {
+        "doctype": "CRM View Settings",
+        "label": "Activities",
+        "dt": "CRM Task",
+        "route_name": "Tasks",
+        "type": "list",
+        "pinned": 1,
+        "public": 1,
+        "is_default": 1,
+        "is_standard": 1,
+        "icon": "lucide-calendar-check",
+        "user": "",
+        "order_by": "due_date asc",
+        "filters": "{}",
+        "load_default_columns": 1,
+    }
+    if activities_view_name:
+        act_doc = frappe.get_doc("CRM View Settings", activities_view_name)
+        act_doc.update(act_data)
+        act_doc.save(ignore_permissions=True)
+    else:
+        act_doc = frappe.get_doc(act_data)
+        act_doc.insert(ignore_permissions=True)
 
 
 def setup_activities_workspace():
@@ -120,7 +179,7 @@ def setup_activities_workspace():
         {
             "id": "taskbar_label",
             "type": "paragraph",
-            "data": {"text": "<b>Activities Taskbar:</b> Quick access to your Calendar, Tasks, Events, and Calls.", "col": 12}
+            "data": {"text": "<b>Activities Taskbar:</b> Switch between Calendar, Tasks, Events, and Calls.", "col": 12}
         },
         {
             "id": "tb_calendar",
