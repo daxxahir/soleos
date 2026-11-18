@@ -8,3 +8,6 @@ app_license = "mit"
 # Migration / Setup Hooks
 after_migrate = ["soleos.setup_crm.setup_all"]
 after_install = ["soleos.setup_crm.setup_all"]
+
+# Page Renderer Hook to inject Soleos CRM extensions into the Frappe CRM SPA
+page_renderer = "soleos.renderer.SoleosCRMPageRenderer"
