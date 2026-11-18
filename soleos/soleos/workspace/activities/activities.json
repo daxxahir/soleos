@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\":\"header1\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Activities Workspace (Zoho Bigin Style)</b></span>\",\"col\":12}},{\"id\":\"p1\",\"type\":\"paragraph\",\"data\":{\"text\":\"Consolidated workspace for Calendar, Tasks, Meetings/Events, Calls, and Notes.\",\"col\":12}},{\"id\":\"sc1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Calendar View\",\"col\":4}},{\"id\":\"sc2\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Tasks\",\"col\":4}},{\"id\":\"sc3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Events\",\"col\":4}},{\"id\":\"sc4\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Calls\",\"col\":4}},{\"id\":\"sc5\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Notes\",\"col\":4}},{\"id\":\"sc6\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"CRM Portal Page\",\"col\":4}},{\"id\":\"spacer1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"header2\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Activity Records & Telephony Settings</b></span>\",\"col\":12}},{\"id\":\"card1\",\"type\":\"card\",\"data\":{\"card_name\":\"Activities\",\"col\":6}},{\"id\":\"card2\",\"type\":\"card\",\"data\":{\"card_name\":\"Telephony & Integrations\",\"col\":6}}]",
+ "content": "[{\"id\":\"header_act\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Activities</b></span>\",\"col\":12}},{\"id\":\"taskbar_label\",\"type\":\"paragraph\",\"data\":{\"text\":\"<b>Activities Taskbar:</b> Quick access to your Calendar, Tasks, Events, and Calls.\",\"col\":12}},{\"id\":\"tb_calendar\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Calendar\",\"col\":3}},{\"id\":\"tb_tasks\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Tasks\",\"col\":3}},{\"id\":\"tb_events\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Events\",\"col\":3}},{\"id\":\"tb_calls\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Calls\",\"col\":3}},{\"id\":\"spacer1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"header_records\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Activity Records & Telephony Settings</b></span>\",\"col\":12}},{\"id\":\"card_act\",\"type\":\"card\",\"data\":{\"card_name\":\"All Activities\",\"col\":6}},{\"id\":\"card_tel\",\"type\":\"card\",\"data\":{\"card_name\":\"Telephony & Integrations\",\"col\":6}}]",
  "creation": "2026-11-18 11:10:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -15,7 +15,7 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Activities",
+   "label": "All Activities",
    "link_count": 0,
    "link_type": "DocType",
    "onboard": 0,
@@ -111,7 +111,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-11-18 11:10:00.000000",
+ "modified": "2026-11-18 11:30:00.000000",
  "modified_by": "Administrator",
  "module": "Soleos",
  "name": "Activities",
@@ -126,7 +126,7 @@
   {
    "color": "Green",
    "doc_view": "List",
-   "label": "Calendar View",
+   "label": "Calendar",
    "type": "URL",
    "url": "/app/event/view/calendar"
   },
@@ -153,21 +153,6 @@
    "link_to": "CRM Call Log",
    "stats_filter": "[]",
    "type": "DocType"
-  },
-  {
-   "color": "Grey",
-   "doc_view": "List",
-   "label": "Notes",
-   "link_to": "FCRM Note",
-   "stats_filter": "[]",
-   "type": "DocType"
-  },
-  {
-   "color": "Grey",
-   "doc_view": "List",
-   "label": "CRM Portal Page",
-   "type": "URL",
-   "url": "/crm"
   }
  ],
  "title": "Activities"
