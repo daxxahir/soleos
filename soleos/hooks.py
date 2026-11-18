@@ -6,5 +6,5 @@ app_email = "admin@soleosenergy.com"
 app_license = "mit"
 
 # Migration / Setup Hooks
-after_migrate = ["soleos.setup_crm.setup_bigin_pipeline"]
-after_install = ["soleos.setup_crm.setup_bigin_pipeline"]
+after_migrate = ["soleos.setup_crm.setup_all"]
+after_install = ["soleos.setup_crm.setup_all"]
