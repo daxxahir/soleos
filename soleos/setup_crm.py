@@ -11,6 +11,7 @@ def setup_all():
     setup_activities_workspace()
     setup_sidebar_views()
     setup_crm_activities_scripts()
+    setup_clickable_contacts_and_phones()
     cleanup_other_workspaces()
     frappe.clear_cache()
     frappe.logger("soleos").info("Soleos App Setup completed.")
@@ -620,6 +621,292 @@ def setup_crm_activities_scripts():
                 "script": s["script"]
             })
             d.insert(ignore_permissions=True)
+
+
+def setup_clickable_contacts_and_phones():
+    """
+    Configures CRM Form Scripts across Deal, Lead, Contact, Organization, Call Log, and Task
+    so phone numbers are clickable to call (tel:...) and contacts are clickable to view
+    everywhere phone numbers/contacts appear on CRM web and mobile app.
+    """
+    frappe.logger("soleos").info("Configuring clickable contacts and phone numbers across CRM...")
+
+    shared_engine = """
+(function() {
+  if (window.__soleos_phone_engine_active) return;
+  window.__soleos_phone_engine_active = true;
+
+  if (!document.getElementById('soleos-clickable-phone-css')) {
+    const style = document.createElement('style');
+    style.id = 'soleos-clickable-phone-css';
+    style.textContent = `
+      .soleos-phone-link {
+        color: #15803d !important;
+        font-weight: 500 !important;
+        text-decoration: none !important;
+        cursor: pointer !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 5px !important;
+        padding: 2px 4px !important;
+        border-radius: 4px !important;
+        transition: all 0.15s ease !important;
+      }
+      .soleos-phone-link:hover {
+        background-color: #f0fdf4 !important;
+        text-decoration: underline !important;
+        color: #166534 !important;
+      }
+      .soleos-call-btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        padding: 3px 8px !important;
+        margin-left: 6px !important;
+        border-radius: 5px !important;
+        background: #f0fdf4 !important;
+        color: #16a34a !important;
+        border: 1px solid #bbf7d0 !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        text-decoration: none !important;
+        cursor: pointer !important;
+        vertical-align: middle !important;
+        transition: all 0.15s ease !important;
+        white-space: nowrap !important;
+      }
+      .soleos-call-btn:hover {
+        background: #dcfce7 !important;
+        border-color: #86efac !important;
+        color: #15803d !important;
+      }
+      .soleos-contact-link {
+        color: #1d4ed8 !important;
+        font-weight: 600 !important;
+        text-decoration: none !important;
+        cursor: pointer !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        transition: all 0.15s ease !important;
+      }
+      .soleos-contact-link:hover {
+        text-decoration: underline !important;
+        color: #1e40af !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function cleanPhone(val) {
+    if (!val || typeof val !== 'string') return '';
+    let trimmed = val.trim();
+    if (trimmed.includes('/') || trimmed.includes('@') || trimmed.includes('₹') || trimmed.includes('$')) return '';
+    let digits = trimmed.replace(/\\D/g, '');
+    if (digits.length >= 7 && digits.length <= 15) {
+      return trimmed.replace(/[^0-9+]/g, '');
+    }
+    return '';
+  }
+
+  function callNumber(phone, e) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    let clean = cleanPhone(phone);
+    if (clean) {
+      window.location.href = 'tel:' + clean;
+    }
+  }
+
+  function goToContact(nameOrId, e) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (window.__crm_router) {
+      window.__crm_router.push({ name: 'Contact', params: { contactId: nameOrId } });
+    } else {
+      window.location.href = '/crm/contacts/' + encodeURIComponent(nameOrId);
+    }
+  }
+
+  function enhanceDOM() {
+    // 1. Form Inputs with Phone/Mobile Number
+    let fields = document.querySelectorAll('.field, [data-field]');
+    fields.forEach(field => {
+      let labelEl = field.querySelector('.truncate, label');
+      let labelText = labelEl ? labelEl.textContent.trim().toLowerCase() : '';
+      let isPhone = labelText.includes('phone') || labelText.includes('mobile') || labelText.includes('call');
+      if (isPhone) {
+        let input = field.querySelector('input');
+        if (input && input.value) {
+          let clean = cleanPhone(input.value);
+          if (clean && !field.querySelector('.soleos-call-btn')) {
+            let btn = document.createElement('a');
+            btn.className = 'soleos-call-btn';
+            btn.href = 'tel:' + clean;
+            btn.title = 'Call ' + input.value;
+            btn.innerHTML = '📞 <span>Call</span>';
+            btn.onclick = (e) => callNumber(clean, e);
+            if (input.parentNode) input.parentNode.appendChild(btn);
+          }
+        } else {
+          let valEl = field.querySelector('.text-ink-gray-5, .text-ink-gray-9, .cursor-pointer');
+          if (valEl && valEl.textContent && !valEl.querySelector('.soleos-call-btn')) {
+            let clean = cleanPhone(valEl.textContent);
+            if (clean && valEl.parentNode && !valEl.parentNode.querySelector('.soleos-call-btn')) {
+              let btn = document.createElement('a');
+              btn.className = 'soleos-call-btn';
+              btn.href = 'tel:' + clean;
+              btn.title = 'Call ' + clean;
+              btn.innerHTML = '📞 <span>Call</span>';
+              btn.onclick = (e) => callNumber(clean, e);
+              valEl.parentNode.appendChild(btn);
+            }
+          }
+        }
+      }
+    });
+
+    // 2. Deal Contacts Section & MobileDeal Contacts
+    let phoneRows = document.querySelectorAll('.flex.items-center.gap-3');
+    phoneRows.forEach(row => {
+      if (row.dataset.soleosPhoneEnhanced) return;
+      let text = row.textContent.trim();
+      let clean = cleanPhone(text);
+      if (clean && !row.querySelector('.soleos-phone-link')) {
+        row.dataset.soleosPhoneEnhanced = 'true';
+        let svg = row.querySelector('svg');
+        let iconHtml = svg ? svg.outerHTML : '📞';
+        row.innerHTML = `
+          <a href="tel:${clean}" class="soleos-phone-link" title="Call ${text}">
+            ${iconHtml}
+            <span>${text}</span>
+          </a>
+        `;
+        let a = row.querySelector('a');
+        if (a) a.onclick = (e) => callNumber(clean, e);
+      }
+    });
+
+    // 3. Contact Headers in Deal / MobileDeal
+    let contactHeaders = document.querySelectorAll('button[class*="header"], .font-semibold');
+    contactHeaders.forEach(el => {
+      if (el.dataset.soleosContactEnhanced) return;
+      let parent = el.closest('[class*="Section"], .section, tr, [class*="list-row"]');
+      if (parent && (parent.textContent.toLowerCase().includes('mobile') || parent.textContent.toLowerCase().includes('phone') || parent.querySelector('.soleos-phone-link, a[href^="tel:"]'))) {
+        let name = el.textContent.trim();
+        if (name && !name.includes('Contacts') && !name.includes('Details') && !el.querySelector('a')) {
+          el.dataset.soleosContactEnhanced = 'true';
+          el.style.cursor = 'pointer';
+          el.title = 'View Contact: ' + name;
+          el.classList.add('soleos-contact-link');
+          el.onclick = (e) => goToContact(name, e);
+        }
+      }
+    });
+
+    // 4. List View & Table Cells (Contacts list, Deals list, Leads list, Call logs)
+    let cells = document.querySelectorAll('[class*="list-row"] [class*="truncate"], td');
+    cells.forEach(cell => {
+      if (cell.dataset.soleosCellEnhanced) return;
+      let text = cell.textContent.trim();
+      let clean = cleanPhone(text);
+      if (clean && !cell.querySelector('a[href^="tel:"]')) {
+        cell.dataset.soleosCellEnhanced = 'true';
+        cell.innerHTML = `
+          <a href="tel:${clean}" class="soleos-phone-link" title="Call ${text}">
+            📞 <span>${text}</span>
+          </a>
+        `;
+        let a = cell.querySelector('a');
+        if (a) a.onclick = (e) => callNumber(clean, e);
+      }
+    });
+  }
+
+  // Global click interception
+  document.addEventListener('click', function(e) {
+    let a = e.target.closest('a[href^="tel:"]');
+    if (a) {
+      e.stopPropagation();
+      return;
+    }
+    let text = e.target.textContent ? e.target.textContent.trim() : '';
+    let clean = cleanPhone(text);
+    if (clean && e.target.closest('.field, [data-field], [class*="list-row"], [class*="Section"]')) {
+      callNumber(clean, e);
+    }
+  }, true);
+
+  // MutationObserver for SPA responsiveness
+  let timer = null;
+  const obs = new MutationObserver(() => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(enhanceDOM, 200);
+  });
+  obs.observe(document.body, { childList: true, subtree: true });
+
+  setTimeout(enhanceDOM, 300);
+  setInterval(enhanceDOM, 2500);
+})();
+"""
+
+    doctypes = ["CRM Deal", "CRM Lead", "Contact", "CRM Organization", "CRM Call Log", "CRM Task"]
+    
+    for dt in doctypes:
+        dt_class_name = dt.replace(" ", "")
+        form_script = f"""class {dt_class_name} {{
+  mounted() {{
+    if (this && this.router) window.__crm_router = this.router;
+    {shared_engine}
+  }}
+}}"""
+
+        list_script = f"""function setupList(obj) {{
+  if (obj && obj.router) window.__crm_router = obj.router;
+  {shared_engine}
+  return {{ actions: [], bulk_actions: [] }};
+}}"""
+
+        form_name = f"Clickable Contacts & Phones for {dt} Form"
+        if frappe.db.exists("CRM Form Script", form_name):
+            d = frappe.get_doc("CRM Form Script", form_name)
+            d.script = form_script
+            d.enabled = 1
+            d.save(ignore_permissions=True)
+        else:
+            d = frappe.get_doc({
+                "doctype": "CRM Form Script",
+                "name": form_name,
+                "dt": dt,
+                "view": "Form",
+                "script": form_script,
+                "enabled": 1,
+                "is_standard": 0,
+            })
+            d.insert(ignore_permissions=True)
+
+        if dt not in ["CRM Task", "CRM Call Log"]:
+            list_name = f"Clickable Contacts & Phones for {dt} List"
+            if frappe.db.exists("CRM Form Script", list_name):
+                d = frappe.get_doc("CRM Form Script", list_name)
+                d.script = list_script
+                d.enabled = 1
+                d.save(ignore_permissions=True)
+            else:
+                d = frappe.get_doc({
+                    "doctype": "CRM Form Script",
+                    "name": list_name,
+                    "dt": dt,
+                    "view": "List",
+                    "script": list_script,
+                    "enabled": 1,
+                    "is_standard": 0,
+                })
+                d.insert(ignore_permissions=True)
 
 
 def cleanup_other_workspaces():
