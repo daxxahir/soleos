@@ -6,6 +6,7 @@ from frappe.custom.doctype.property_setter.property_setter import make_property_
 def setup_all():
     """Master setup function called on migration and app install."""
     frappe.logger("soleos").info("Running Soleos App Setup...")
+    setup_bigin_fields()
     setup_bigin_pipeline()
     setup_activity_workflows()
     setup_activities_workspace()
@@ -17,6 +18,105 @@ def setup_all():
     frappe.logger("soleos").info("Soleos App Setup completed.")
 
 
+def setup_bigin_fields():
+    """
+    Sets up custom fields and property setters matching Zoho Bigin CRM export.
+    """
+    frappe.logger("soleos").info("Setting up Bigin Custom Fields...")
+
+    def create_cf(dt, fieldname, label, fieldtype, options=None, insert_after=None, in_list_view=0, in_standard_filter=0, read_only=0):
+        exists = frappe.db.exists("Custom Field", {"dt": dt, "fieldname": fieldname})
+        if not exists:
+            cf = frappe.get_doc({
+                "doctype": "Custom Field",
+                "dt": dt,
+                "fieldname": fieldname,
+                "label": label,
+                "fieldtype": fieldtype,
+                "options": options or "",
+                "insert_after": insert_after or "",
+                "in_list_view": in_list_view,
+                "in_standard_filter": in_standard_filter,
+                "read_only": read_only,
+                "module": "soleos"
+            })
+            cf.insert(ignore_permissions=True)
+        else:
+            cf = frappe.get_doc("Custom Field", exists)
+            cf.label = label
+            if options:
+                cf.options = options
+            cf.save(ignore_permissions=True)
+
+    # CRM Organization
+    make_property_setter("CRM Organization", "organization_name", "label", "Company Name", "Data", for_doctype=False, validate_fields_for_doctype=False)
+    create_cf("CRM Organization", "company_id", "Company Id", "Data", insert_after="organization_name", in_list_view=1, read_only=1)
+    create_cf("CRM Organization", "company_owner", "Company Owner", "Link", options="User", insert_after="company_id", in_list_view=1)
+    create_cf("CRM Organization", "india_hq", "India HQ", "Data", insert_after="territory")
+    create_cf("CRM Organization", "to_latest_fy_inr_cr", "T.O. Latest FY (INR CR)", "Data", insert_after="annual_revenue")
+    create_cf("CRM Organization", "rating_info", "Rating Info", "Data", insert_after="to_latest_fy_inr_cr")
+    create_cf("CRM Organization", "tag", "Tag", "Data", insert_after="rating_info")
+    create_cf("CRM Organization", "billing_street", "Billing Street", "Data", insert_after="address")
+    create_cf("CRM Organization", "billing_city", "Billing City", "Data", insert_after="billing_street")
+    create_cf("CRM Organization", "billing_state", "Billing State", "Data", insert_after="billing_city")
+    create_cf("CRM Organization", "billing_country", "Billing Country", "Data", insert_after="billing_state")
+    create_cf("CRM Organization", "billing_code", "Billing Code", "Data", insert_after="billing_country")
+    create_cf("CRM Organization", "last_activity_time", "Last Activity Time", "Datetime", insert_after="billing_code")
+
+    # Contact
+    make_property_setter("Contact", "designation", "label", "Designation + Dept.", "Data", for_doctype=False, validate_fields_for_doctype=False)
+    create_cf("Contact", "contact_id", "Contact Id", "Data", insert_after="last_name", read_only=1)
+    create_cf("Contact", "contact_owner", "Contact Owner", "Link", options="User", insert_after="contact_id")
+    create_cf("Contact", "kdm", "KDM", "Check", insert_after="designation")
+    create_cf("Contact", "location", "Location", "Data", insert_after="mobile_no")
+    create_cf("Contact", "company_name_id", "Company Name.id", "Data", insert_after="company_name")
+    create_cf("Contact", "tag", "Tag", "Data", insert_after="location")
+    create_cf("Contact", "mailing_street", "Mailing Street", "Data", insert_after="address")
+    create_cf("Contact", "mailing_city", "Mailing City", "Data", insert_after="mailing_street")
+    create_cf("Contact", "mailing_state", "Mailing State", "Data", insert_after="mailing_city")
+    create_cf("Contact", "mailing_country", "Mailing Country", "Data", insert_after="mailing_state")
+    create_cf("Contact", "mailing_zip", "Mailing Zip", "Data", insert_after="mailing_country")
+    create_cf("Contact", "last_activity_time", "Last Activity Time", "Datetime", insert_after="mailing_zip")
+
+    # CRM Deal
+    make_property_setter("CRM Deal", "organization", "label", "Company Name", "Data", for_doctype=False, validate_fields_for_doctype=False)
+    make_property_setter("CRM Deal", "contact", "label", "Contact Name", "Data", for_doctype=False, validate_fields_for_doctype=False)
+    make_property_setter("CRM Deal", "status", "label", "Stage", "Data", for_doctype=False, validate_fields_for_doctype=False)
+    make_property_setter("CRM Deal", "expected_closure_date", "label", "Closing Date", "Data", for_doctype=False, validate_fields_for_doctype=False)
+    make_property_setter("CRM Deal", "source", "label", "Lead Source", "Data", for_doctype=False, validate_fields_for_doctype=False)
+
+    create_cf("CRM Deal", "deal_id", "Deal Id", "Data", insert_after="naming_series", read_only=1)
+    create_cf("CRM Deal", "deal_name", "Deal Name", "Data", insert_after="deal_id", in_list_view=1)
+    create_cf("CRM Deal", "pipeline", "Pipeline", "Select", options="India Business\nInternational Business", insert_after="deal_name", in_list_view=1, in_standard_filter=1)
+    create_cf("CRM Deal", "sub_pipeline", "Sub-Pipeline", "Data", insert_after="pipeline")
+    create_cf("CRM Deal", "company_name_id", "Company Name.id", "Data", insert_after="organization")
+    create_cf("CRM Deal", "contact_name_id", "Contact Name.id", "Data", insert_after="contact")
+    create_cf("CRM Deal", "project_size_mw", "Project Size MW", "Float", insert_after="sub_pipeline", in_list_view=1)
+    create_cf("CRM Deal", "project_location", "Project Location", "Data", insert_after="project_size_mw")
+    create_cf("CRM Deal", "project_configuration", "Project Configuration", "Data", insert_after="project_location")
+    create_cf("CRM Deal", "category", "Category", "Data", insert_after="project_configuration")
+    create_cf("CRM Deal", "deal_type", "Type", "Data", insert_after="category")
+    create_cf("CRM Deal", "tag", "Tag", "Data", insert_after="deal_type")
+    create_cf("CRM Deal", "deal_description", "Description", "Text", insert_after="tag")
+    create_cf("CRM Deal", "last_activity_time", "Last Activity Time", "Datetime", insert_after="deal_description")
+
+    # CRM Task
+    make_property_setter("CRM Task", "title", "label", "Subject", "Data", for_doctype=False, validate_fields_for_doctype=False)
+    make_property_setter("CRM Task", "assigned_to", "label", "Task Owner", "Data", for_doctype=False, validate_fields_for_doctype=False)
+    make_property_setter("CRM Task", "due_date", "label", "Due Date", "Data", for_doctype=False, validate_fields_for_doctype=False)
+    make_property_setter("CRM Task", "reference_docname", "label", "Related To", "Data", for_doctype=False, validate_fields_for_doctype=False)
+    make_property_setter("CRM Task", "reference_doctype", "label", "Related To Type", "Data", for_doctype=False, validate_fields_for_doctype=False)
+
+    create_cf("CRM Task", "task_id", "Task Id", "Data", insert_after="title", read_only=1)
+    create_cf("CRM Task", "repeat", "Repeat", "Data", insert_after="due_date")
+    create_cf("CRM Task", "reminder", "Reminder", "Datetime", insert_after="repeat")
+    create_cf("CRM Task", "related_to_id", "Related To.id", "Data", insert_after="reference_docname")
+    create_cf("CRM Task", "contact_name_id", "Contact Name.id", "Data", insert_after="related_to_id")
+    create_cf("CRM Task", "contact_name", "Contact Name", "Link", options="Contact", insert_after="contact_name_id")
+    create_cf("CRM Task", "tag", "Tag", "Data", insert_after="contact_name")
+    create_cf("CRM Task", "closed_time", "Closed Time", "Datetime", insert_after="tag")
+
+
 def setup_bigin_pipeline():
     """
     Sets up Zoho Bigin-style Deal Pipeline stages in Frappe CRM.
@@ -25,33 +125,16 @@ def setup_bigin_pipeline():
 
     # 1. Define Zoho Bigin Pipeline Stages
     stages = [
-        {"deal_status": "Qualification", "type": "Open", "position": 1, "color": "gray", "probability": 10},
-        {"deal_status": "Needs Analysis", "type": "Ongoing", "position": 2, "color": "blue", "probability": 20},
-        {"deal_status": "Proposal/Price Quote", "type": "Ongoing", "position": 3, "color": "amber", "probability": 50},
-        {"deal_status": "Negotiation/Review", "type": "Ongoing", "position": 4, "color": "violet", "probability": 75},
-        {"deal_status": "Closed Won", "type": "Won", "position": 5, "color": "green", "probability": 100},
-        {"deal_status": "Closed Lost", "type": "Lost", "position": 6, "color": "red", "probability": 0},
+        {"deal_status": "Target Group - ICP", "type": "Open", "position": 1, "color": "blue", "probability": 10},
+        {"deal_status": "Approached", "type": "Ongoing", "position": 2, "color": "amber", "probability": 20},
+        {"deal_status": "Contacted", "type": "Ongoing", "position": 3, "color": "orange", "probability": 30},
+        {"deal_status": "MQL - Meeting Arranged", "type": "Ongoing", "position": 4, "color": "yellow", "probability": 40},
+        {"deal_status": "SQL - Sales OK", "type": "Ongoing", "position": 5, "color": "violet", "probability": 50},
+        {"deal_status": "Solutioning", "type": "Ongoing", "position": 6, "color": "cyan", "probability": 60},
+        {"deal_status": "Termsheet Signed / Proposal Submitted", "type": "Ongoing", "position": 7, "color": "purple", "probability": 80},
+        {"deal_status": "Won - SHA/PPA Signed / Contract Signed", "type": "Won", "position": 8, "color": "green", "probability": 100},
+        {"deal_status": "Closed Lost", "type": "Lost", "position": 9, "color": "red", "probability": 0},
     ]
-
-    rename_map = {
-        "Demo/Making": "Needs Analysis",
-        "Proposal/Quotation": "Proposal/Price Quote",
-        "Negotiation": "Negotiation/Review",
-        "Won": "Closed Won",
-        "Lost": "Closed Lost",
-    }
-
-    for old_name, new_name in rename_map.items():
-        if frappe.db.exists("CRM Deal Status", old_name) and not frappe.db.exists("CRM Deal Status", new_name):
-            frappe.rename_doc("CRM Deal Status", old_name, new_name, force=True)
-
-    if frappe.db.exists("CRM Deal Status", "Ready to Close"):
-        deal_count = frappe.db.count("CRM Deal", {"status": "Ready to Close"})
-        if deal_count == 0:
-            frappe.delete_doc("CRM Deal Status", "Ready to Close", force=True)
-        else:
-            frappe.db.sql("UPDATE `tabCRM Deal` SET status='Negotiation/Review' WHERE status='Ready to Close'")
-            frappe.delete_doc("CRM Deal Status", "Ready to Close", force=True)
 
     for s in stages:
         if frappe.db.exists("CRM Deal Status", s["deal_status"]):
@@ -132,36 +215,55 @@ def setup_sidebar_views():
         for v in views:
             frappe.delete_doc("CRM View Settings", v.name, force=True)
 
-    # 2. Ensure 'Pipelines' view is pinned in the sidebar
-    stages = ["Qualification", "Needs Analysis", "Proposal/Price Quote", "Negotiation/Review", "Closed Won", "Closed Lost"]
-    kanban_cols = [{"name": s, "color": "gray"} for s in stages]
-    pipeline_view_name = frappe.db.exists("CRM View Settings", {"label": "Pipelines", "dt": "CRM Deal"})
-    pipeline_data = {
-        "doctype": "CRM View Settings",
-        "label": "Pipelines",
-        "dt": "CRM Deal",
-        "route_name": "Deals",
-        "type": "kanban",
-        "pinned": 1,
-        "public": 1,
-        "is_default": 1,
-        "is_standard": 1,
-        "user": "",
-        "column_field": "status",
-        "title_field": "organization",
-        "columns": json.dumps([{"name": s} for s in stages]),
-        "kanban_columns": json.dumps(kanban_cols),
-        "kanban_fields": json.dumps(["annual_revenue", "email", "mobile_no", "deal_owner", "modified"]),
-        "order_by": "modified desc",
-        "filters": "{}",
-    }
-    if pipeline_view_name:
-        p_doc = frappe.get_doc("CRM View Settings", pipeline_view_name)
-        p_doc.update(pipeline_data)
-        p_doc.save(ignore_permissions=True)
-    else:
-        p_doc = frappe.get_doc(pipeline_data)
-        p_doc.insert(ignore_permissions=True)
+    # 2. Ensure Pipeline views are pinned in the sidebar
+    stages = [
+        {"deal_status": "Target Group - ICP", "color": "blue"},
+        {"deal_status": "Approached", "color": "amber"},
+        {"deal_status": "Contacted", "color": "orange"},
+        {"deal_status": "MQL - Meeting Arranged", "color": "yellow"},
+        {"deal_status": "SQL - Sales OK", "color": "violet"},
+        {"deal_status": "Solutioning", "color": "cyan"},
+        {"deal_status": "Termsheet Signed / Proposal Submitted", "color": "purple"},
+        {"deal_status": "Won - SHA/PPA Signed / Contract Signed", "color": "green"},
+        {"deal_status": "Closed Lost", "color": "red"},
+    ]
+    kanban_cols = [{"name": s["deal_status"], "color": s["color"]} for s in stages]
+    columns_json = json.dumps([{"name": s["deal_status"]} for s in stages])
+
+    pipeline_configs = [
+        {"label": "All Deals", "route_name": "Deals", "filters": "{}", "is_default": 1},
+        {"label": "India Business", "route_name": "India-Business", "filters": json.dumps({"pipeline": "India Business"}), "is_default": 0},
+        {"label": "International Business", "route_name": "International-Business", "filters": json.dumps({"pipeline": "International Business"}), "is_default": 0},
+    ]
+
+    for p in pipeline_configs:
+        v_name = frappe.db.exists("CRM View Settings", {"label": p["label"], "dt": "CRM Deal"})
+        v_data = {
+            "doctype": "CRM View Settings",
+            "label": p["label"],
+            "dt": "CRM Deal",
+            "route_name": p["route_name"],
+            "type": "kanban",
+            "pinned": 1,
+            "public": 1,
+            "is_default": p["is_default"],
+            "is_standard": 1,
+            "user": "",
+            "column_field": "status",
+            "title_field": "deal_name",
+            "columns": columns_json,
+            "kanban_columns": json.dumps(kanban_cols),
+            "kanban_fields": json.dumps(["deal_name", "pipeline", "project_size_mw", "organization", "deal_owner", "expected_closure_date"]),
+            "order_by": "modified desc",
+            "filters": p["filters"],
+        }
+        if v_name:
+            doc = frappe.get_doc("CRM View Settings", v_name)
+            doc.update(v_data)
+            doc.save(ignore_permissions=True)
+        else:
+            doc = frappe.get_doc(v_data)
+            doc.insert(ignore_permissions=True)
 
     # 3. Ensure single 'Activities' view is pinned in the sidebar with Zoho Bigin columns
     activities_view_name = frappe.db.exists("CRM View Settings", {"label": "Activities", "dt": "CRM Task"})
