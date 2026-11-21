@@ -71,135 +71,15 @@
   }
 
   /* --------------------------------------------------------------------------
-     1. Activities Taskbar Switcher (Calendar, Tasks, Events, Calls)
+     1. Activities Taskbar & Footer Cleanup (Preserve Clean Native Views)
      -------------------------------------------------------------------------- */
-  function renderActivitiesTaskbar() {
-    const path = window.location.pathname;
-    const isTasksPage = path.includes('/crm/tasks');
-    const isCallsPage = path.includes('/crm/call-logs');
-
-    if (!isTasksPage && !isCallsPage) {
-      const existing = document.getElementById('soleos-activities-taskbar');
-      if (existing) existing.remove();
-      const existingFooter = document.getElementById('soleos-tasks-footer-summary');
-      if (existingFooter) existingFooter.remove();
-      return;
-    }
-
-    let existing = document.getElementById('soleos-activities-taskbar');
-    if (!existing) {
-      const mainContainer = document.querySelector('main') || document.querySelector('#app > div');
-      if (!mainContainer) return;
-
-      const taskbar = document.createElement('div');
-      taskbar.id = 'soleos-activities-taskbar';
-
-      taskbar.innerHTML = `
-        <div class="soleos-tab-item ${isTasksPage ? 'active' : ''}" id="soleos-tab-tasks">
-          <span>Tasks</span>
-        </div>
-        <div class="soleos-tab-item" id="soleos-tab-calendar">
-          <span>📅 Calendar</span>
-        </div>
-        <div class="soleos-tab-item" id="soleos-tab-events">
-          <span>Events</span>
-        </div>
-        <div class="soleos-tab-item ${isCallsPage ? 'active' : ''}" id="soleos-tab-calls">
-          <span>Calls</span>
-        </div>
-      `;
-
-      const headerArea = mainContainer.querySelector('header') || mainContainer.firstElementChild;
-      if (headerArea && headerArea.parentNode) {
-        headerArea.parentNode.insertBefore(taskbar, headerArea.nextSibling);
-      } else {
-        mainContainer.prepend(taskbar);
-      }
-
-      document.getElementById('soleos-tab-tasks').onclick = () => {
-        if (!window.location.pathname.includes('/crm/tasks')) {
-          navigateToRoute('/crm/tasks');
-        }
-      };
-
-      document.getElementById('soleos-tab-calendar').onclick = () => {
-        openCalendarModal();
-      };
-
-      document.getElementById('soleos-tab-events').onclick = () => {
-        openEventsModal();
-      };
-
-      document.getElementById('soleos-tab-calls').onclick = () => {
-        if (!window.location.pathname.includes('/crm/call-logs')) {
-          navigateToRoute('/crm/call-logs');
-        }
-      };
-    } else {
-      const tasksTab = document.getElementById('soleos-tab-tasks');
-      const callsTab = document.getElementById('soleos-tab-calls');
-      if (tasksTab) tasksTab.classList.toggle('active', isTasksPage);
-      if (callsTab) callsTab.classList.toggle('active', isCallsPage);
-    }
-
-    if (isTasksPage) {
-      renderTasksFooter();
-    } else {
-      const existingFooter = document.getElementById('soleos-tasks-footer-summary');
-      if (existingFooter) existingFooter.remove();
-    }
-  }
-
-  /* --------------------------------------------------------------------------
-     2. Tasks Footer Summary (Total Tasks, Open Tasks, Completed, Overdue)
-     -------------------------------------------------------------------------- */
-  function renderTasksFooter() {
-    let footer = document.getElementById('soleos-tasks-footer-summary');
-    if (!footer) {
-      const mainContainer = document.querySelector('main') || document.querySelector('#app > div');
-      if (!mainContainer) return;
-
-      footer = document.createElement('div');
-      footer.id = 'soleos-tasks-footer-summary';
-      mainContainer.appendChild(footer);
-    }
-
-    const rows = document.querySelectorAll('table tbody tr, [data-row-key]');
-    let total = rows.length || 0;
-    let completed = 0;
-    let open = 0;
-
-    rows.forEach(r => {
-      const text = r.innerText.toLowerCase();
-      if (text.includes('completed')) {
-        completed++;
-      } else {
-        open++;
-      }
-    });
-
-    if (total === 0) {
-      footer.innerHTML = `
-        <div class="soleos-footer-stats">
-          <span class="soleos-footer-stat-item">Total Tasks - <strong>-</strong></span>
-          <span class="soleos-footer-stat-item">Open Tasks - <strong>-</strong></span>
-          <span class="soleos-footer-stat-item">Completed - <strong>-</strong></span>
-          <span class="soleos-footer-stat-item">Overdue - <strong>-</strong></span>
-        </div>
-      `;
-    } else {
-      footer.innerHTML = `
-        <div class="soleos-footer-stats">
-          <span class="soleos-footer-stat-item">Total Tasks - <strong>${total}</strong></span>
-          <span class="soleos-footer-stat-item">Open Tasks - <strong>${open}</strong></span>
-          <span class="soleos-footer-stat-item">Completed - <strong>${completed}</strong></span>
-          <span class="soleos-footer-stat-item">Overdue - <strong>0</strong></span>
-        </div>
-        <div>
-          <span>Records per page: <strong>${total}</strong></span>
-        </div>
-      `;
-    }
+  function removeCustomActivitiesTaskbars() {
+    const existing = document.getElementById('soleos-activities-taskbar');
+    if (existing) existing.remove();
+    const existingFooter = document.getElementById('soleos-tasks-footer-summary');
+    if (existingFooter) existingFooter.remove();
+    const zohoBar = document.getElementById('zoho-activities-taskbar');
+    if (zohoBar) zohoBar.remove();
   }
 
   /* --------------------------------------------------------------------------
@@ -1077,7 +957,7 @@
   }
 
   function runAllEnhancements() {
-    renderActivitiesTaskbar();
+    removeCustomActivitiesTaskbars();
     removeCustomDealsViewsDropdown();
     enhanceKanbanColumns();
     enhanceContactsAndPhones();

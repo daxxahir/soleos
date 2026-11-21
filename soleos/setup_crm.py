@@ -693,49 +693,6 @@ def setup_crm_activities_scripts():
     frappe.logger("soleos").info("Configuring CRM Activities Scripts...")
 
     task_script = """function setupList(obj) {
-  function renderTaskbar() {
-    let container = document.getElementById('zoho-activities-taskbar');
-    if (!container) {
-      let target = document.querySelector('.layout-header') || document.querySelector('[class*="LayoutHeader"]');
-      if (!target) return;
-
-      container = document.createElement('div');
-      container.id = 'zoho-activities-taskbar';
-      container.style.cssText = 'display:flex;align-items:center;gap:12px;padding:8px 20px;border-bottom:1px solid #e5e7eb;background:#ffffff;font-size:13px;font-weight:500;z-index:20;position:relative;';
-
-      container.innerHTML = `
-        <div id="act-tab-calendar" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;color:#4b5563;transition:all 0.2s;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
-          <span>📅</span> <span style="font-weight:500;">Calendar</span>
-        </div>
-        <div id="act-tab-tasks" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;color:#16a34a;background-color:#f0fdf4;border:1px solid #bbf7d0;font-weight:600;">
-          <span>📋</span> <span>Tasks</span>
-        </div>
-        <div id="act-tab-events" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;color:#4b5563;transition:all 0.2s;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
-          <span>🤝</span> <span style="font-weight:500;">Events</span>
-        </div>
-        <div id="act-tab-calls" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;color:#4b5563;transition:all 0.2s;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
-          <span>📞</span> <span style="font-weight:500;">Calls</span>
-        </div>
-      `;
-
-      if (target.parentNode) {
-        target.parentNode.insertBefore(container, target.nextSibling);
-      }
-
-      let calBtn = document.getElementById('act-tab-calendar');
-      if (calBtn) calBtn.onclick = () => openCalendarModal();
-
-      let evBtn = document.getElementById('act-tab-events');
-      if (evBtn) evBtn.onclick = () => window.open('/app/event', '_blank');
-
-      let callBtn = document.getElementById('act-tab-calls');
-      if (callBtn) callBtn.onclick = () => {
-        if (obj && obj.router) obj.router.push({ name: 'Call Logs' });
-        else window.location.href = '/crm/call-logs';
-      };
-    }
-  }
-
   function openCalendarModal() {
     let existing = document.getElementById('crm-calendar-modal');
     if (existing) existing.remove();
@@ -763,10 +720,6 @@ def setup_crm_activities_scripts():
     document.getElementById('close-cal-modal').onclick = () => modal.remove();
     modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
   }
-
-  setTimeout(renderTaskbar, 200);
-  let timer = setInterval(renderTaskbar, 800);
-  setTimeout(() => clearInterval(timer), 12000);
 
   return {
     actions: [
@@ -794,49 +747,6 @@ def setup_crm_activities_scripts():
 }"""
 
     call_script = """function setupList(obj) {
-  function renderTaskbar() {
-    let container = document.getElementById('zoho-activities-taskbar');
-    if (!container) {
-      let target = document.querySelector('.layout-header') || document.querySelector('[class*="LayoutHeader"]');
-      if (!target) return;
-
-      container = document.createElement('div');
-      container.id = 'zoho-activities-taskbar';
-      container.style.cssText = 'display:flex;align-items:center;gap:12px;padding:8px 20px;border-bottom:1px solid #e5e7eb;background:#ffffff;font-size:13px;font-weight:500;z-index:20;position:relative;';
-
-      container.innerHTML = `
-        <div id="act-tab-calendar" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;color:#4b5563;transition:all 0.2s;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
-          <span>📅</span> <span style="font-weight:500;">Calendar</span>
-        </div>
-        <div id="act-tab-tasks" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;color:#4b5563;transition:all 0.2s;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
-          <span>📋</span> <span style="font-weight:500;">Tasks</span>
-        </div>
-        <div id="act-tab-events" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;color:#4b5563;transition:all 0.2s;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
-          <span>🤝</span> <span style="font-weight:500;">Events</span>
-        </div>
-        <div id="act-tab-calls" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;color:#16a34a;background-color:#f0fdf4;border:1px solid #bbf7d0;font-weight:600;">
-          <span>📞</span> <span>Calls</span>
-        </div>
-      `;
-
-      if (target.parentNode) {
-        target.parentNode.insertBefore(container, target.nextSibling);
-      }
-
-      let calBtn = document.getElementById('act-tab-calendar');
-      if (calBtn) calBtn.onclick = () => openCalendarModal();
-
-      let taskBtn = document.getElementById('act-tab-tasks');
-      if (taskBtn) taskBtn.onclick = () => {
-        if (obj && obj.router) obj.router.push({ name: 'Tasks' });
-        else window.location.href = '/crm/tasks';
-      };
-
-      let evBtn = document.getElementById('act-tab-events');
-      if (evBtn) evBtn.onclick = () => window.open('/app/event', '_blank');
-    }
-  }
-
   function openCalendarModal() {
     let existing = document.getElementById('crm-calendar-modal');
     if (existing) existing.remove();
@@ -864,10 +774,6 @@ def setup_crm_activities_scripts():
     document.getElementById('close-cal-modal').onclick = () => modal.remove();
     modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
   }
-
-  setTimeout(renderTaskbar, 200);
-  let timer = setInterval(renderTaskbar, 800);
-  setTimeout(() => clearInterval(timer), 12000);
 
   return {
     actions: [
