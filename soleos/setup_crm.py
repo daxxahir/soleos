@@ -8,6 +8,7 @@ def setup_all():
     frappe.logger("soleos").info("Running Soleos App Setup...")
     setup_bigin_fields()
     setup_bigin_pipeline()
+    setup_crm_fields_layouts()
     setup_activity_workflows()
     setup_activities_workspace()
     setup_sidebar_views()
@@ -24,7 +25,7 @@ def setup_bigin_fields():
     """
     frappe.logger("soleos").info("Setting up Bigin Custom Fields...")
 
-    def create_cf(dt, fieldname, label, fieldtype, options=None, insert_after=None, in_list_view=0, in_standard_filter=0, read_only=0):
+    def create_cf(dt, fieldname, label, fieldtype, options=None, default=None, reqd=0, insert_after=None, in_list_view=0, in_standard_filter=0, read_only=0):
         exists = frappe.db.exists("Custom Field", {"dt": dt, "fieldname": fieldname})
         if not exists:
             cf = frappe.get_doc({
@@ -34,6 +35,8 @@ def setup_bigin_fields():
                 "label": label,
                 "fieldtype": fieldtype,
                 "options": options or "",
+                "default": default or "",
+                "reqd": reqd,
                 "insert_after": insert_after or "",
                 "in_list_view": in_list_view,
                 "in_standard_filter": in_standard_filter,
@@ -44,8 +47,14 @@ def setup_bigin_fields():
         else:
             cf = frappe.get_doc("Custom Field", exists)
             cf.label = label
-            if options:
+            cf.fieldtype = fieldtype
+            if options is not None:
                 cf.options = options
+            if default is not None:
+                cf.default = default
+            cf.reqd = reqd
+            cf.in_list_view = in_list_view
+            cf.in_standard_filter = in_standard_filter
             cf.save(ignore_permissions=True)
 
     # CRM Organization
@@ -78,26 +87,44 @@ def setup_bigin_fields():
     create_cf("Contact", "mailing_zip", "Mailing Zip", "Data", insert_after="mailing_country")
     create_cf("Contact", "last_activity_time", "Last Activity Time", "Datetime", insert_after="mailing_zip")
 
-    # CRM Deal
+    # CRM Deal Title & Property Setters
+    make_property_setter("CRM Deal", "", "title_field", "deal_name", "Data", for_doctype=False, validate_fields_for_doctype=False)
+    make_property_setter("CRM Deal", "", "show_title_field_in_link", 1, "Check", for_doctype=False, validate_fields_for_doctype=False)
+
     make_property_setter("CRM Deal", "organization", "label", "Company Name", "Data", for_doctype=False, validate_fields_for_doctype=False)
+    make_property_setter("CRM Deal", "organization", "reqd", 1, "Check", for_doctype=False, validate_fields_for_doctype=False)
+    make_property_setter("CRM Deal", "organization", "in_list_view", 1, "Check", for_doctype=False, validate_fields_for_doctype=False)
+
     make_property_setter("CRM Deal", "contact", "label", "Contact Name", "Data", for_doctype=False, validate_fields_for_doctype=False)
+    make_property_setter("CRM Deal", "contact", "reqd", 1, "Check", for_doctype=False, validate_fields_for_doctype=False)
+    make_property_setter("CRM Deal", "contact", "in_list_view", 1, "Check", for_doctype=False, validate_fields_for_doctype=False)
+
     make_property_setter("CRM Deal", "status", "label", "Stage", "Data", for_doctype=False, validate_fields_for_doctype=False)
+    make_property_setter("CRM Deal", "status", "reqd", 1, "Check", for_doctype=False, validate_fields_for_doctype=False)
+    make_property_setter("CRM Deal", "status", "in_list_view", 1, "Check", for_doctype=False, validate_fields_for_doctype=False)
+
+    make_property_setter("CRM Deal", "probability", "label", "Probability (%)", "Data", for_doctype=False, validate_fields_for_doctype=False)
+    make_property_setter("CRM Deal", "probability", "reqd", 1, "Check", for_doctype=False, validate_fields_for_doctype=False)
+
     make_property_setter("CRM Deal", "expected_closure_date", "label", "Closing Date", "Data", for_doctype=False, validate_fields_for_doctype=False)
+    make_property_setter("CRM Deal", "expected_closure_date", "reqd", 1, "Check", for_doctype=False, validate_fields_for_doctype=False)
+
     make_property_setter("CRM Deal", "source", "label", "Lead Source", "Data", for_doctype=False, validate_fields_for_doctype=False)
+    make_property_setter("CRM Deal", "source", "reqd", 1, "Check", for_doctype=False, validate_fields_for_doctype=False)
 
     create_cf("CRM Deal", "deal_id", "Deal Id", "Data", insert_after="naming_series", read_only=1)
-    create_cf("CRM Deal", "deal_name", "Deal Name", "Data", insert_after="deal_id", in_list_view=1)
+    create_cf("CRM Deal", "deal_name", "Deal Name", "Data", insert_after="deal_id", reqd=1, in_list_view=1, in_standard_filter=1)
     create_cf("CRM Deal", "pipeline", "Pipeline", "Select", options="India Business\nInternational Business", insert_after="deal_name", in_list_view=1, in_standard_filter=1)
     create_cf("CRM Deal", "sub_pipeline", "Sub-Pipeline", "Data", insert_after="pipeline")
     create_cf("CRM Deal", "company_name_id", "Company Name.id", "Data", insert_after="organization")
     create_cf("CRM Deal", "contact_name_id", "Contact Name.id", "Data", insert_after="contact")
-    create_cf("CRM Deal", "project_size_mw", "Project Size MW", "Float", insert_after="sub_pipeline", in_list_view=1)
-    create_cf("CRM Deal", "project_location", "Project Location", "Data", insert_after="project_size_mw")
-    create_cf("CRM Deal", "project_configuration", "Project Configuration", "Data", insert_after="project_location")
-    create_cf("CRM Deal", "category", "Category", "Data", insert_after="project_configuration")
-    create_cf("CRM Deal", "deal_type", "Type", "Data", insert_after="category")
+    create_cf("CRM Deal", "project_size_mw", "Project Size MW", "Float", insert_after="sub_pipeline", reqd=1, in_list_view=1, in_standard_filter=1)
+    create_cf("CRM Deal", "project_location", "Project Location", "Data", insert_after="project_size_mw", reqd=1, in_list_view=1)
+    create_cf("CRM Deal", "project_configuration", "Project Configuration", "Select", options="Solar Ground\nSolar + BESS\nSolar + Wind\nOthers", default="Solar Ground", insert_after="project_location", reqd=1)
+    create_cf("CRM Deal", "category", "Category", "Select", options="\nEPC\nIPP\nTBD\nTPA", insert_after="project_configuration", reqd=1)
+    create_cf("CRM Deal", "deal_type", "Type", "Select", options="\nCaptive\nEPC Tender\nGroup Captive\nOff taker\nOpen Access\nTBD\nTPA", insert_after="category", reqd=1)
     create_cf("CRM Deal", "tag", "Tag", "Data", insert_after="deal_type")
-    create_cf("CRM Deal", "deal_description", "Description", "Text", insert_after="tag")
+    create_cf("CRM Deal", "deal_description", "Description", "Small Text", insert_after="tag")
     create_cf("CRM Deal", "last_activity_time", "Last Activity Time", "Datetime", insert_after="deal_description")
 
     # CRM Task
@@ -144,6 +171,171 @@ def setup_bigin_pipeline():
         else:
             doc = frappe.get_doc({"doctype": "CRM Deal Status", **s})
             doc.insert(ignore_permissions=True)
+
+
+def setup_crm_fields_layouts():
+    """
+    Configures Quick Entry, Side Panel, and Data Fields layouts for CRM Deal
+    matching the Zoho Bigin 'Create Deal' and Deal View parity.
+    """
+    frappe.logger("soleos").info("Configuring CRM Deal layouts matching Zoho Bigin...")
+
+    quick_entry_layout = [
+        {
+            "name": "first_tab",
+            "sections": [
+                {
+                    "name": "deal_main_section",
+                    "label": "",
+                    "hideLabel": True,
+                    "opened": True,
+                    "columns": [
+                        {
+                            "name": "col_create_deal",
+                            "fields": [
+                                "deal_name",
+                                "organization",
+                                "contact",
+                                "status",
+                                "project_size_mw",
+                                "project_location",
+                                "project_configuration",
+                                "category",
+                                "deal_type",
+                                "probability",
+                                "expected_closure_date",
+                                "source",
+                                "deal_description"
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+
+    side_panel_layout = [
+        {
+            "label": "Deal Information",
+            "name": "deal_info_section",
+            "opened": True,
+            "columns": [
+                {
+                    "name": "col_deal_1",
+                    "fields": [
+                        "deal_name",
+                        "organization",
+                        "contact",
+                        "status",
+                        "project_size_mw",
+                        "project_location",
+                        "project_configuration",
+                        "category",
+                        "deal_type",
+                        "probability",
+                        "expected_closure_date",
+                        "source",
+                        "deal_description",
+                        "pipeline",
+                        "deal_owner",
+                        "tag"
+                    ]
+                }
+            ]
+        },
+        {
+            "label": "Contacts",
+            "name": "contacts_section",
+            "opened": True,
+            "editable": False,
+            "contacts": []
+        }
+    ]
+
+    data_fields_layout = [
+        {
+            "name": "first_tab",
+            "sections": [
+                {
+                    "label": "Deal Details",
+                    "name": "details_section",
+                    "opened": True,
+                    "columns": [
+                        {
+                            "name": "col_df_1",
+                            "fields": [
+                                "deal_name",
+                                "organization",
+                                "contact",
+                                "status"
+                            ]
+                        },
+                        {
+                            "name": "col_df_2",
+                            "fields": [
+                                "project_size_mw",
+                                "project_location",
+                                "project_configuration",
+                                "category"
+                            ]
+                        },
+                        {
+                            "name": "col_df_3",
+                            "fields": [
+                                "deal_type",
+                                "probability",
+                                "expected_closure_date",
+                                "source"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Description",
+                    "name": "desc_section",
+                    "opened": True,
+                    "columns": [
+                        {
+                            "name": "col_desc",
+                            "fields": [
+                                "deal_description"
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+
+    layouts = {
+        "Quick Entry": quick_entry_layout,
+        "Side Panel": side_panel_layout,
+        "Data Fields": data_fields_layout
+    }
+
+    for ltype, lcontent in layouts.items():
+        l_name = frappe.db.exists("CRM Fields Layout", {"dt": "CRM Deal", "type": ltype})
+        if l_name:
+            doc = frappe.get_doc("CRM Fields Layout", l_name)
+            doc.layout = json.dumps(lcontent)
+            doc.save(ignore_permissions=True)
+        else:
+            doc = frappe.get_doc({
+                "doctype": "CRM Fields Layout",
+                "dt": "CRM Deal",
+                "type": ltype,
+                "layout": json.dumps(lcontent)
+            })
+            doc.insert(ignore_permissions=True)
+
+
+def validate_deal(doc, method=None):
+    """Ensure deal_name is set and connected name references are synchronized."""
+    if not doc.deal_name:
+        parts = [doc.organization or "Deal"]
+        if doc.project_size_mw:
+            parts.append(f"{doc.project_size_mw}MW")
+        doc.deal_name = " - ".join(parts)
 
 
 def setup_activity_workflows():
@@ -253,7 +445,11 @@ def setup_sidebar_views():
             "title_field": "deal_name",
             "columns": columns_json,
             "kanban_columns": json.dumps(kanban_cols),
-            "kanban_fields": json.dumps(["deal_name", "pipeline", "project_size_mw", "organization", "deal_owner", "expected_closure_date"]),
+            "kanban_fields": json.dumps([
+                "deal_name", "organization", "contact", "project_size_mw",
+                "project_location", "project_configuration", "category",
+                "deal_type", "probability", "expected_closure_date", "source"
+            ]),
             "order_by": "modified desc",
             "filters": p["filters"],
         }

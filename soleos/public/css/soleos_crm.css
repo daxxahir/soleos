@@ -40,7 +40,8 @@
 }
 
 .soleos-tab-item.active {
-  color: #059669; /* Zoho Bigin Green */
+  color: #059669;
+  /* Zoho Bigin Green */
   font-weight: 600;
   border-bottom: 2.5px solid #059669;
 }
@@ -132,8 +133,15 @@
 }
 
 @keyframes soleosFadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .soleos-menu-tabs {
@@ -900,4 +908,40 @@
   font-size: 0.875rem;
   font-weight: 500;
   animation: soleosFadeIn 0.2s ease-out;
+}
+
+/* ==========================================================================
+   ZOHO BIGIN "CREATE DEAL" MODAL STYLING & RED REQUIRED ACCENTS
+   ========================================================================== */
+
+/* Red indicator on left border for required fields in Create Deal modal */
+[role="dialog"] [data-fieldname="deal_name"] input,
+[role="dialog"] [data-fieldname="organization"] input,
+[role="dialog"] [data-fieldname="contact"] input,
+[role="dialog"] [data-fieldname="status"] input,
+[role="dialog"] [data-fieldname="status"] button,
+[role="dialog"] [data-fieldname="project_size_mw"] input,
+[role="dialog"] [data-fieldname="project_location"] input,
+[role="dialog"] [data-fieldname="project_configuration"] select,
+[role="dialog"] [data-fieldname="project_configuration"] button,
+[role="dialog"] [data-fieldname="category"] select,
+[role="dialog"] [data-fieldname="category"] button,
+[role="dialog"] [data-fieldname="deal_type"] select,
+[role="dialog"] [data-fieldname="deal_type"] button,
+[role="dialog"] [data-fieldname="probability"] input,
+[role="dialog"] [data-fieldname="expected_closure_date"] input,
+[role="dialog"] [data-fieldname="source"] input,
+[role="dialog"] [data-fieldname="source"] button {
+  border-left: 3px solid #ef4444 !important;
+  border-radius: 4px;
+}
+
+/* Focus state with Zoho Bigin Green border */
+[role="dialog"] input:focus,
+[role="dialog"] select:focus,
+[role="dialog"] textarea:focus,
+[role="dialog"] button:focus {
+  border-color: #10b981 !important;
+  outline: none !important;
+  box-shadow: 0 0 0 1px #10b981 !important;
 }

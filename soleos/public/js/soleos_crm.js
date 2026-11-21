@@ -1119,7 +1119,44 @@
   }
 
   /* --------------------------------------------------------------------------
-     8. Navigation & Observer Engine
+     8. Create Deal Modal Enhancements (Zoho Bigin Parity)
+     -------------------------------------------------------------------------- */
+  function enhanceCreateDealModal() {
+    const dialogs = document.querySelectorAll('[role="dialog"]');
+    dialogs.forEach(dialog => {
+      const title = dialog.querySelector('h3, [role="heading"]');
+      if (!title || !title.textContent.includes('Create Deal')) return;
+
+      // 1. Description placeholder
+      const descInput = dialog.querySelector('[data-fieldname="deal_description"] textarea, textarea[name="deal_description"]');
+      if (descInput && !descInput.getAttribute('placeholder')) {
+        descInput.setAttribute('placeholder', 'A few words about this deal');
+      }
+
+      // 2. Closing Date placeholder
+      const dateInput = dialog.querySelector('[data-fieldname="expected_closure_date"] input');
+      if (dateInput && !dateInput.getAttribute('placeholder')) {
+        dateInput.setAttribute('placeholder', 'MM/DD/YYYY');
+      }
+
+      // 3. Stage placeholder
+      const stageInput = dialog.querySelector('[data-fieldname="status"] input, [data-fieldname="status"] button');
+      if (stageInput && !stageInput.textContent.trim() && !stageInput.value) {
+        stageInput.setAttribute('placeholder', 'Choose a stage');
+      }
+
+      // 4. Default Project Configuration to "Solar Ground" if empty
+      const configSelect = dialog.querySelector('[data-fieldname="project_configuration"] select, [data-fieldname="project_configuration"] input');
+      if (configSelect && !configSelect.value) {
+        configSelect.value = 'Solar Ground';
+        configSelect.dispatchEvent(new Event('input', { bubbles: true }));
+        configSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+  }
+
+  /* --------------------------------------------------------------------------
+     9. Navigation & Observer Engine
      -------------------------------------------------------------------------- */
   function navigateToRoute(route) {
     if (window.history && window.history.pushState) {
@@ -1135,6 +1172,7 @@
     renderDealsViewsDropdown();
     enhanceKanbanColumns();
     enhanceContactsAndPhones();
+    enhanceCreateDealModal();
   }
 
   // Initial Run
