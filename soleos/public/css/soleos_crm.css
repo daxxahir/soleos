@@ -376,20 +376,29 @@
 
 /* Stage Header Title & Count Stacking */
 .soleos-stage-title-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  line-height: 1.25;
-  user-select: none;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  line-height: 1.25 !important;
+  user-select: none !important;
+  margin-left: 2px !important;
 }
 
 .soleos-stage-deal-count {
-  font-size: 0.76rem;
-  font-weight: 500;
-  color: #6b7280;
-  margin-top: 2px;
-  letter-spacing: -0.01em;
+  font-size: 0.76rem !important;
+  font-weight: 500 !important;
+  color: #6b7280 !important;
+  margin-top: 2px !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.1 !important;
+}
+
+/* Guard: STRICTLY ensure deal count is only shown inside header, never inside cards or card list */
+[data-column] .soleos-stage-deal-count,
+[data-name] .soleos-stage-deal-count,
+.overflow-y-auto .soleos-stage-deal-count {
+  display: none !important;
 }
 
 /* Custom Three-Dot Column Menu Button */

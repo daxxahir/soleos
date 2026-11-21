@@ -405,8 +405,24 @@
     const path = window.location.pathname;
     if (!path.includes('/crm/deals')) return;
 
-    // Find all Kanban columns
-    const columns = document.querySelectorAll('.min-w-72.w-72, [data-column]');
+    // Clean up any mistakenly inserted count elements inside cards or card list
+    document.querySelectorAll('[data-column] .soleos-stage-deal-count, [data-name] .soleos-stage-deal-count, .overflow-y-auto .soleos-stage-deal-count').forEach(el => el.remove());
+    document.querySelectorAll('[data-column] .soleos-stage-title-wrap, [data-name] .soleos-stage-title-wrap, .overflow-y-auto .soleos-stage-title-wrap').forEach(wrap => {
+      const parent = wrap.parentNode;
+      if (!parent) return;
+      while (wrap.firstChild) {
+        if (wrap.firstChild.classList?.contains('soleos-stage-deal-count')) {
+          wrap.firstChild.remove();
+        } else {
+          parent.insertBefore(wrap.firstChild, wrap);
+        }
+      }
+      wrap.remove();
+    });
+
+    // Find ONLY actual top-level Kanban columns (exclude any child containers or scroll wrappers)
+    const allCols = Array.from(document.querySelectorAll('.min-w-72.w-72, .min-w-72'));
+    const columns = allCols.filter(c => !c.closest('.overflow-y-auto') && !c.closest('[data-column]'));
     if (!columns || columns.length === 0) return;
 
     // Close any open popovers on outside click
@@ -420,19 +436,29 @@
     }
 
     columns.forEach(col => {
-      // 1. Identify stage name
-      const draggable = col.querySelector('[data-column]') || (col.hasAttribute('data-column') ? col : null);
+      // 1. Column Header (strictly the top header row)
+      const header = col.querySelector(':scope > .flex.gap-2.items-center, :scope > div:first-child');
+      if (!header) return;
+
+      const titleBlock = header.querySelector('.flex.items-center.text-base');
+      if (!titleBlock) return;
+
+      // Find the stage title element ONLY directly inside titleBlock
+      let titleEl = titleBlock.querySelector(':scope > div.text-ink-gray-9, :scope > .soleos-stage-title-wrap > div.text-ink-gray-9, .text-ink-gray-9');
+      if (!titleEl || titleEl.closest('[data-column]') || titleEl.closest('.overflow-y-auto')) return;
+
+      // 2. Identify stage name
+      const draggable = col.querySelector('[data-column]');
       let stageName = draggable ? draggable.getAttribute('data-column') : '';
-      const titleEl = col.querySelector('.text-ink-gray-9');
       if (!stageName && titleEl) {
         stageName = titleEl.textContent.trim();
       }
       if (!stageName) return;
 
-      // 2. Count Deals in this column
+      // 3. Count Deals in this column
       let count = 0;
       if (draggable) {
-        const cards = draggable.querySelectorAll('[data-name], .group.cursor-pointer, .border-outline-gray-2');
+        const cards = draggable.querySelectorAll(':scope > [data-name], :scope > div, :scope > a');
         count = cards.length;
       }
       if (count === 0 && cachedStageSummary[stageName]) {
@@ -442,31 +468,28 @@
       // Label: "1 Deal", "0 Deal", "3 Deals", "12 Deals" (matching Zoho Bigin exactly)
       const countLabel = count === 1 ? '1 Deal' : `${count} ${count === 0 ? 'Deal' : 'Deals'}`;
 
-      // 3. Insert or update Stage Deal Count below Stage Title
-      if (titleEl) {
-        let titleWrap = titleEl.closest('.soleos-stage-title-wrap');
-        if (!titleWrap) {
-          titleWrap = document.createElement('div');
-          titleWrap.className = 'soleos-stage-title-wrap';
-          titleEl.parentNode.insertBefore(titleWrap, titleEl);
-          titleWrap.appendChild(titleEl);
-        }
-
-        let countEl = titleWrap.querySelector('.soleos-stage-deal-count');
-        if (!countEl) {
-          countEl = document.createElement('div');
-          countEl.className = 'soleos-stage-deal-count';
-          titleWrap.appendChild(countEl);
-        }
-        if (countEl.textContent !== countLabel) {
-          countEl.textContent = countLabel;
-        }
+      // 4. Insert or update Stage Deal Count ONLY in titleBlock (Header Title)
+      let titleWrap = titleEl.closest('.soleos-stage-title-wrap');
+      if (!titleWrap || titleWrap.parentNode !== titleBlock) {
+        titleWrap = document.createElement('div');
+        titleWrap.className = 'soleos-stage-title-wrap';
+        titleEl.parentNode.insertBefore(titleWrap, titleEl);
+        titleWrap.appendChild(titleEl);
       }
 
-      // 4. Custom Three-Dot Column Menu Button
-      const headerRight = col.querySelector('.flex.gap-2.items-center')?.querySelector('.flex:last-child') || col.querySelector('header .flex');
+      let countEl = titleWrap.querySelector('.soleos-stage-deal-count');
+      if (!countEl) {
+        countEl = document.createElement('div');
+        countEl.className = 'soleos-stage-deal-count';
+        titleWrap.appendChild(countEl);
+      }
+      if (countEl.textContent !== countLabel) {
+        countEl.textContent = countLabel;
+      }
+
+      // 5. Custom Three-Dot Column Menu Button in header
+      const headerRight = header.querySelector('.flex:last-child') || header.querySelector('.flex');
       if (headerRight && !headerRight.querySelector('.soleos-stage-more-btn')) {
-        // Find existing more button to hide or replace
         const nativeMoreBtn = headerRight.querySelector('button[icon="lucide-more-horizontal"], button svg.lucide-more-horizontal')?.closest('button');
         if (nativeMoreBtn) {
           nativeMoreBtn.style.display = 'none';
@@ -478,7 +501,6 @@
         moreBtn.innerHTML = '···';
         moreBtn.setAttribute('data-stage', stageName);
 
-        // Position relative parent for menu
         headerRight.style.position = 'relative';
         headerRight.prepend(moreBtn);
 
