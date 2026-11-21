@@ -17,24 +17,7 @@
   console.log('[Soleos CRM] Initializing Zoho Bigin Parity Extensions...');
 
   // State
-  let activeDealView = 'All Deals';
-  let activeViewTab = 'All Views';
-  let isMenuOpen = false;
   let cachedStageSummary = {};
-
-  const DEAL_VIEWS = [
-    { id: 'all_deals', label: 'All Deals', filter: null },
-    { id: 'closing_next_month', label: 'Closing Next Month', filter: 'closing_next_month' },
-    { id: 'closing_this_month', label: 'Closing This Month', filter: 'closing_this_month' },
-    { id: 'my_deals', label: 'My Deals', filter: 'my_deals' },
-    { id: 'my_deals_closing_this_month', label: 'My Deals Closing This Month', filter: 'my_deals_closing_this_month' },
-    { id: 'new_last_week', label: 'New Last Week', filter: 'new_last_week' },
-    { id: 'new_this_week', label: 'New This Week', filter: 'new_this_week' },
-    { id: 'recently_created', label: 'Recently Created Deals', filter: 'recently_created' },
-    { id: 'recently_modified', label: 'Recently Modified Deals', filter: 'recently_modified' },
-    { id: 'all_ext_shared', label: 'All External Shared Deals', filter: null },
-    { id: 'not_viewed', label: 'Not Yet Viewed', filter: null }
-  ];
 
   /* --------------------------------------------------------------------------
      API Helper
@@ -279,112 +262,13 @@
   }
 
   /* --------------------------------------------------------------------------
-     4. Deals Views Dropdown (Zoho Bigin Parity)
+     4. Remove Custom Deals Views Dropdown (Revert to Native View Controls)
      -------------------------------------------------------------------------- */
-  function renderDealsViewsDropdown() {
-    const path = window.location.pathname;
-    const isDealsPage = path.includes('/crm/deals');
-
-    if (!isDealsPage) {
-      const existing = document.getElementById('soleos-deals-view-dropdown-container');
-      if (existing) existing.remove();
-      return;
-    }
-
-    let container = document.getElementById('soleos-deals-view-dropdown-container');
-    if (!container) {
-      const pageHeader = document.querySelector('header') || document.querySelector('h1')?.parentNode;
-      if (!pageHeader) return;
-
-      container = document.createElement('div');
-      container.id = 'soleos-deals-view-dropdown-container';
-      container.style.cssText = 'position:relative;display:inline-flex;align-items:center;margin-right:1rem;z-index:30;';
-
-      container.innerHTML = `
-        <div id="soleos-deals-view-dropdown-btn">
-          <span id="soleos-active-view-label">${activeDealView}</span>
-          <svg style="width:14px;height:14px;margin-left:2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
-        </div>
-        <div class="soleos-views-menu-popover" id="soleos-views-menu" style="display:none;">
-          <div class="soleos-menu-tabs">
-            <div class="soleos-menu-tab active" id="soleos-tab-all-views">All Views</div>
-            <div class="soleos-menu-tab" id="soleos-tab-favorites">Favorites</div>
-          </div>
-          <div class="soleos-menu-search">
-            <input type="text" id="soleos-view-search-input" placeholder="Search Views" />
-          </div>
-          <div class="soleos-menu-section-title">Public Views</div>
-          <div class="soleos-menu-list" id="soleos-menu-items-list">
-            ${DEAL_VIEWS.map(v => `
-              <div class="soleos-menu-item ${v.label === activeDealView ? 'selected' : ''}" data-view-id="${v.id}" data-view-label="${v.label}">
-                <span>${v.label}</span>
-                ${v.label === activeDealView ? '<span style="color:#059669;">✓</span>' : ''}
-              </div>
-            `).join('')}
-          </div>
-          <div class="soleos-menu-footer">
-            <span class="soleos-create-view-btn" id="soleos-btn-create-view">
-              <span>+</span> Create View
-            </span>
-          </div>
-        </div>
-      `;
-
-      pageHeader.insertBefore(container, pageHeader.firstChild);
-
-      const btn = document.getElementById('soleos-deals-view-dropdown-btn');
-      const menu = document.getElementById('soleos-views-menu');
-
-      btn.onclick = (e) => {
-        e.stopPropagation();
-        isMenuOpen = !isMenuOpen;
-        menu.style.display = isMenuOpen ? 'flex' : 'none';
-        if (isMenuOpen) {
-          document.getElementById('soleos-view-search-input').focus();
-        }
-      };
-
-      document.addEventListener('click', (e) => {
-        if (!container.contains(e.target)) {
-          isMenuOpen = false;
-          menu.style.display = 'none';
-        }
-      });
-
-      const searchInput = document.getElementById('soleos-view-search-input');
-      searchInput.oninput = (e) => {
-        const query = e.target.value.toLowerCase();
-        const items = document.querySelectorAll('.soleos-menu-item');
-        items.forEach(it => {
-          const label = it.getAttribute('data-view-label').toLowerCase();
-          it.style.display = label.includes(query) ? 'flex' : 'none';
-        });
-      };
-
-      container.addEventListener('click', (e) => {
-        const item = e.target.closest('.soleos-menu-item');
-        if (item) {
-          const label = item.getAttribute('data-view-label');
-          activeDealView = label;
-          document.getElementById('soleos-active-view-label').textContent = label;
-          isMenuOpen = false;
-          menu.style.display = 'none';
-          applyDealFilter(label);
-        }
-      });
-
-      document.getElementById('soleos-btn-create-view').onclick = () => {
-        isMenuOpen = false;
-        menu.style.display = 'none';
-        alert('To create a custom view, use the Filter bar and click Save as View.');
-      };
-    }
-  }
-
-  function applyDealFilter(viewLabel) {
-    console.log('[Soleos CRM] Applying Deal View:', viewLabel);
+  function removeCustomDealsViewsDropdown() {
+    const existing = document.getElementById('soleos-deals-view-dropdown-container');
+    if (existing) existing.remove();
+    const existingMenu = document.getElementById('soleos-views-menu');
+    if (existingMenu) existingMenu.remove();
   }
 
   /* --------------------------------------------------------------------------
@@ -1162,16 +1046,10 @@
     const buttons = document.querySelectorAll('button');
     buttons.forEach(btn => {
       const text = (btn.textContent || '').trim();
-      if (text === 'Save Changes') {
+      if (text === 'Save Changes' || text === 'Cancel') {
         btn.style.setProperty('display', 'none', 'important');
-        const container = btn.closest('.border-r.pr-2') || btn.parentElement;
+        const container = btn.closest('.border-r.pr-2, .border-r') || btn.parentElement;
         if (container) {
-          container.style.setProperty('display', 'none', 'important');
-          container.classList.add('soleos-hidden-save-view');
-        }
-      } else if (text === 'Cancel') {
-        const container = btn.closest('.border-r.pr-2');
-        if (container && container.textContent.includes('Save Changes')) {
           container.style.setProperty('display', 'none', 'important');
           container.classList.add('soleos-hidden-save-view');
         }
@@ -1179,7 +1057,7 @@
     });
 
     document.querySelectorAll('.border-r.pr-2, .border-r').forEach(el => {
-      if (el.textContent.includes('Save Changes')) {
+      if (el.textContent.includes('Save Changes') || el.textContent.includes('Cancel')) {
         el.style.setProperty('display', 'none', 'important');
         el.classList.add('soleos-hidden-save-view');
       }
@@ -1200,7 +1078,7 @@
 
   function runAllEnhancements() {
     renderActivitiesTaskbar();
-    renderDealsViewsDropdown();
+    removeCustomDealsViewsDropdown();
     enhanceKanbanColumns();
     enhanceContactsAndPhones();
     enhanceCreateDealModal();
