@@ -6,6 +6,9 @@
  * 2. Tasks Footer Summary: Total Tasks, Open Tasks, Completed, Overdue
  * 3. Deals Views Dropdown: [ All Deals ▾ ] with All Views, Favorites, Search, Public Views list
  * 4. Clickable Contacts and Phone Numbers (Click-to-Call with tel:...) across Web & Mobile
+ * 5. Kanban Column Deal Count below Stage Title (e.g., "3 Deals", "12 Deals", "0 Deal")
+ * 6. Kanban Column Three-Dot Customization Menu (+ New Deal, New Stage, Stage Automation, etc. + Banner)
+ * 7. Slide-over Stage Automation Drawer with criteria builder, 10 actions palette, and persistent save
  */
 
 (function () {
@@ -17,6 +20,7 @@
   let activeDealView = 'All Deals';
   let activeViewTab = 'All Views';
   let isMenuOpen = false;
+  let cachedStageSummary = {};
 
   const DEAL_VIEWS = [
     { id: 'all_deals', label: 'All Deals', filter: null },
@@ -31,6 +35,57 @@
     { id: 'all_ext_shared', label: 'All External Shared Deals', filter: null },
     { id: 'not_viewed', label: 'Not Yet Viewed', filter: null }
   ];
+
+  /* --------------------------------------------------------------------------
+     API Helper
+     -------------------------------------------------------------------------- */
+  async function callApi(method, args = {}) {
+    if (window.frappe && window.frappe.call) {
+      return new Promise((resolve, reject) => {
+        window.frappe.call({
+          method: method,
+          args: args,
+          callback: (r) => resolve(r.message),
+          error: (err) => reject(err)
+        });
+      });
+    }
+
+    // Fallback to fetch
+    const csrfToken = window.csrf_token || (document.cookie.match(/csrf_token=([^;]+)/) ? document.cookie.match(/csrf_token=([^;]+)/)[1] : '');
+    const res = await fetch(`/api/method/${method}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Frappe-CSRF-Token': csrfToken
+      },
+      body: JSON.stringify(args)
+    });
+    const data = await res.json();
+    if (data.exc) {
+      throw new Error(data._server_messages || 'Server Error');
+    }
+    return data.message;
+  }
+
+  /* --------------------------------------------------------------------------
+     Toast Notification Helper
+     -------------------------------------------------------------------------- */
+  function showToast(message) {
+    const existing = document.querySelector('.soleos-toast');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.className = 'soleos-toast';
+    toast.innerText = message;
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transition = 'opacity 0.3s ease';
+      setTimeout(() => toast.remove(), 300);
+    }, 3200);
+  }
 
   /* --------------------------------------------------------------------------
      1. Activities Taskbar Switcher (Calendar, Tasks, Events, Calls)
@@ -50,7 +105,6 @@
 
     let existing = document.getElementById('soleos-activities-taskbar');
     if (!existing) {
-      // Find suitable insertion target in the CRM page header
       const mainContainer = document.querySelector('main') || document.querySelector('#app > div');
       if (!mainContainer) return;
 
@@ -72,7 +126,6 @@
         </div>
       `;
 
-      // Insert at the top of the content area
       const headerArea = mainContainer.querySelector('header') || mainContainer.firstElementChild;
       if (headerArea && headerArea.parentNode) {
         headerArea.parentNode.insertBefore(taskbar, headerArea.nextSibling);
@@ -80,7 +133,6 @@
         mainContainer.prepend(taskbar);
       }
 
-      // Tab Click Handlers
       document.getElementById('soleos-tab-tasks').onclick = () => {
         if (!window.location.pathname.includes('/crm/tasks')) {
           navigateToRoute('/crm/tasks');
@@ -101,7 +153,6 @@
         }
       };
     } else {
-      // Update active states
       const tasksTab = document.getElementById('soleos-tab-tasks');
       const callsTab = document.getElementById('soleos-tab-calls');
       if (tasksTab) tasksTab.classList.toggle('active', isTasksPage);
@@ -130,7 +181,6 @@
       mainContainer.appendChild(footer);
     }
 
-    // Compute stats from table or rows
     const rows = document.querySelectorAll('table tbody tr, [data-row-key]');
     let total = rows.length || 0;
     let completed = 0;
@@ -146,7 +196,6 @@
     });
 
     if (total === 0) {
-      // Fallback display if table not yet rendered
       footer.innerHTML = `
         <div class="soleos-footer-stats">
           <span class="soleos-footer-stat-item">Total Tasks - <strong>-</strong></span>
@@ -244,7 +293,6 @@
 
     let container = document.getElementById('soleos-deals-view-dropdown-container');
     if (!container) {
-      // Find Deals view header title
       const pageHeader = document.querySelector('header') || document.querySelector('h1')?.parentNode;
       if (!pageHeader) return;
 
@@ -284,10 +332,8 @@
         </div>
       `;
 
-      // Insert at the beginning of the header
       pageHeader.insertBefore(container, pageHeader.firstChild);
 
-      // Toggle Popover
       const btn = document.getElementById('soleos-deals-view-dropdown-btn');
       const menu = document.getElementById('soleos-views-menu');
 
@@ -300,7 +346,6 @@
         }
       };
 
-      // Close on outside click
       document.addEventListener('click', (e) => {
         if (!container.contains(e.target)) {
           isMenuOpen = false;
@@ -308,7 +353,6 @@
         }
       });
 
-      // Search Filter
       const searchInput = document.getElementById('soleos-view-search-input');
       searchInput.oninput = (e) => {
         const query = e.target.value.toLowerCase();
@@ -319,7 +363,6 @@
         });
       };
 
-      // Select View Item
       container.addEventListener('click', (e) => {
         const item = e.target.closest('.soleos-menu-item');
         if (item) {
@@ -332,7 +375,6 @@
         }
       });
 
-      // Create View Click
       document.getElementById('soleos-btn-create-view').onclick = () => {
         isMenuOpen = false;
         menu.style.display = 'none';
@@ -343,14 +385,645 @@
 
   function applyDealFilter(viewLabel) {
     console.log('[Soleos CRM] Applying Deal View:', viewLabel);
-    // You can hook into Frappe CRM filter inputs or state if available
   }
 
   /* --------------------------------------------------------------------------
-     5. Click-to-Call & Clickable Contacts
+     5. Kanban Enhancements: Column Deal Counts & Three-Dot Customization Menu
+     -------------------------------------------------------------------------- */
+  async function fetchStageSummary() {
+    try {
+      const summary = await callApi('soleos.api.get_deals_stage_summary');
+      if (summary) {
+        cachedStageSummary = summary;
+      }
+    } catch (e) {
+      console.warn('[Soleos CRM] Failed to fetch stage summary:', e);
+    }
+  }
+
+  function enhanceKanbanColumns() {
+    const path = window.location.pathname;
+    if (!path.includes('/crm/deals')) return;
+
+    // Find all Kanban columns
+    const columns = document.querySelectorAll('.min-w-72.w-72, [data-column]');
+    if (!columns || columns.length === 0) return;
+
+    // Close any open popovers on outside click
+    if (!window._soleosStageMenuListenerAttached) {
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.soleos-stage-dropdown-menu') && !e.target.closest('.soleos-stage-more-btn')) {
+          document.querySelectorAll('.soleos-stage-dropdown-menu').forEach(m => m.remove());
+        }
+      });
+      window._soleosStageMenuListenerAttached = true;
+    }
+
+    columns.forEach(col => {
+      // 1. Identify stage name
+      const draggable = col.querySelector('[data-column]') || (col.hasAttribute('data-column') ? col : null);
+      let stageName = draggable ? draggable.getAttribute('data-column') : '';
+      const titleEl = col.querySelector('.text-ink-gray-9');
+      if (!stageName && titleEl) {
+        stageName = titleEl.textContent.trim();
+      }
+      if (!stageName) return;
+
+      // 2. Count Deals in this column
+      let count = 0;
+      if (draggable) {
+        const cards = draggable.querySelectorAll('[data-name], .group.cursor-pointer, .border-outline-gray-2');
+        count = cards.length;
+      }
+      if (count === 0 && cachedStageSummary[stageName]) {
+        count = cachedStageSummary[stageName].count || 0;
+      }
+
+      // Label: "1 Deal", "0 Deal", "3 Deals", "12 Deals" (matching Zoho Bigin exactly)
+      const countLabel = count === 1 ? '1 Deal' : `${count} ${count === 0 ? 'Deal' : 'Deals'}`;
+
+      // 3. Insert or update Stage Deal Count below Stage Title
+      if (titleEl) {
+        let titleWrap = titleEl.closest('.soleos-stage-title-wrap');
+        if (!titleWrap) {
+          titleWrap = document.createElement('div');
+          titleWrap.className = 'soleos-stage-title-wrap';
+          titleEl.parentNode.insertBefore(titleWrap, titleEl);
+          titleWrap.appendChild(titleEl);
+        }
+
+        let countEl = titleWrap.querySelector('.soleos-stage-deal-count');
+        if (!countEl) {
+          countEl = document.createElement('div');
+          countEl.className = 'soleos-stage-deal-count';
+          titleWrap.appendChild(countEl);
+        }
+        if (countEl.textContent !== countLabel) {
+          countEl.textContent = countLabel;
+        }
+      }
+
+      // 4. Custom Three-Dot Column Menu Button
+      const headerRight = col.querySelector('.flex.gap-2.items-center')?.querySelector('.flex:last-child') || col.querySelector('header .flex');
+      if (headerRight && !headerRight.querySelector('.soleos-stage-more-btn')) {
+        // Find existing more button to hide or replace
+        const nativeMoreBtn = headerRight.querySelector('button[icon="lucide-more-horizontal"], button svg.lucide-more-horizontal')?.closest('button');
+        if (nativeMoreBtn) {
+          nativeMoreBtn.style.display = 'none';
+        }
+
+        const moreBtn = document.createElement('button');
+        moreBtn.className = 'soleos-stage-more-btn';
+        moreBtn.title = 'Stage Customization';
+        moreBtn.innerHTML = '···';
+        moreBtn.setAttribute('data-stage', stageName);
+
+        // Position relative parent for menu
+        headerRight.style.position = 'relative';
+        headerRight.prepend(moreBtn);
+
+        moreBtn.onclick = (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          toggleStageDropdownMenu(stageName, col, moreBtn, headerRight);
+        };
+      }
+    });
+  }
+
+  /* --------------------------------------------------------------------------
+     Zoho Bigin Column Dropdown Menu Popover
+     -------------------------------------------------------------------------- */
+  function toggleStageDropdownMenu(stageName, colEl, moreBtn, parentContainer) {
+    const existingMenu = parentContainer.querySelector('.soleos-stage-dropdown-menu');
+    if (existingMenu) {
+      existingMenu.remove();
+      return;
+    }
+
+    document.querySelectorAll('.soleos-stage-dropdown-menu').forEach(m => m.remove());
+
+    const menu = document.createElement('div');
+    menu.className = 'soleos-stage-dropdown-menu';
+    menu.innerHTML = `
+      <div class="soleos-stage-dropdown-item" data-action="new-deal">
+        <span class="soleos-item-icon">➕</span>
+        <span>New Deal</span>
+      </div>
+      <div class="soleos-stage-dropdown-item" data-action="new-stage">
+        <span class="soleos-item-icon">📋</span>
+        <span>New Stage</span>
+      </div>
+      <div class="soleos-stage-dropdown-item" data-action="stage-automation">
+        <span class="soleos-item-icon">⚡</span>
+        <span>Stage Automation</span>
+      </div>
+      <div class="soleos-stage-dropdown-item" data-action="add-description">
+        <span class="soleos-item-icon">📝</span>
+        <span>Add Description</span>
+      </div>
+      <div class="soleos-stage-dropdown-item" data-action="move-right">
+        <span class="soleos-item-icon">➡️</span>
+        <span>Move Right</span>
+      </div>
+      <div class="soleos-stage-dropdown-item" data-action="collapse-stage">
+        <span class="soleos-item-icon">⬅️</span>
+        <span>Collapse Stage</span>
+      </div>
+      <div class="soleos-stage-dropdown-item danger" data-action="delete-stage">
+        <span class="soleos-item-icon">🗑️</span>
+        <span>Delete Stage</span>
+      </div>
+
+      <div class="soleos-stage-menu-banner">
+        <p class="soleos-banner-text">
+          Trigger automated actions like sending an email whenever a deal is moved to this stage.
+        </p>
+        <button class="soleos-banner-btn" id="soleos-try-it-now-btn">Try it Now</button>
+      </div>
+    `;
+
+    parentContainer.appendChild(menu);
+
+    // Menu Item Click Handlers
+    menu.querySelector('[data-action="new-deal"]').onclick = (e) => {
+      e.stopPropagation();
+      menu.remove();
+      // Click native column plus button if present
+      const nativePlus = colEl.querySelector('button[icon="lucide-plus"], button svg.lucide-plus')?.closest('button');
+      if (nativePlus) {
+        nativePlus.click();
+      } else {
+        const topNewDealBtn = document.querySelector('button:has(.lucide-plus)');
+        if (topNewDealBtn) topNewDealBtn.click();
+      }
+    };
+
+    menu.querySelector('[data-action="new-stage"]').onclick = async (e) => {
+      e.stopPropagation();
+      menu.remove();
+      const stageNamePrompt = prompt('Enter new Sales Pipeline Stage name:');
+      if (stageNamePrompt && stageNamePrompt.trim()) {
+        try {
+          await callApi('soleos.api.create_stage', { stage_name: stageNamePrompt.trim() });
+          showToast(`Stage "${stageNamePrompt.trim()}" created successfully!`);
+          window.location.reload();
+        } catch (err) {
+          alert('Failed to create stage: ' + (err.message || err));
+        }
+      }
+    };
+
+    menu.querySelector('[data-action="stage-automation"]').onclick = (e) => {
+      e.stopPropagation();
+      menu.remove();
+      openStageAutomationDrawer(stageName);
+    };
+
+    menu.querySelector('#soleos-try-it-now-btn').onclick = (e) => {
+      e.stopPropagation();
+      menu.remove();
+      openStageAutomationDrawer(stageName);
+    };
+
+    menu.querySelector('[data-action="add-description"]').onclick = async (e) => {
+      e.stopPropagation();
+      menu.remove();
+      const existingDesc = cachedStageSummary[stageName]?.description || '';
+      const descPrompt = prompt(`Enter description for stage "${stageName}":`, existingDesc);
+      if (descPrompt !== null) {
+        try {
+          await callApi('soleos.api.save_stage_automation', {
+            stage: stageName,
+            description: descPrompt.trim()
+          });
+          if (cachedStageSummary[stageName]) {
+            cachedStageSummary[stageName].description = descPrompt.trim();
+          }
+          showToast(`Description for "${stageName}" updated!`);
+        } catch (err) {
+          alert('Failed to update description: ' + (err.message || err));
+        }
+      }
+    };
+
+    menu.querySelector('[data-action="move-right"]').onclick = (e) => {
+      e.stopPropagation();
+      menu.remove();
+      const nextSibling = colEl.nextElementSibling;
+      if (nextSibling && colEl.parentNode) {
+        colEl.parentNode.insertBefore(nextSibling, colEl);
+        showToast(`Moved stage "${stageName}" right.`);
+      } else {
+        showToast(`Stage "${stageName}" is already at the rightmost position.`);
+      }
+    };
+
+    menu.querySelector('[data-action="collapse-stage"]').onclick = (e) => {
+      e.stopPropagation();
+      menu.remove();
+      const isCollapsed = colEl.classList.toggle('soleos-column-collapsed');
+      if (isCollapsed) {
+        colEl.title = 'Click to expand column';
+        colEl.onclick = function expandHandler(ev) {
+          if (colEl.classList.contains('soleos-column-collapsed')) {
+            colEl.classList.remove('soleos-column-collapsed');
+            colEl.onclick = null;
+          }
+        };
+      }
+    };
+
+    menu.querySelector('[data-action="delete-stage"]').onclick = async (e) => {
+      e.stopPropagation();
+      menu.remove();
+      if (confirm(`Are you sure you want to delete stage "${stageName}"?`)) {
+        try {
+          await callApi('soleos.api.delete_stage', { stage_name: stageName });
+          showToast(`Stage "${stageName}" deleted.`);
+          colEl.remove();
+        } catch (err) {
+          alert(err.message || 'Cannot delete stage with active deals.');
+        }
+      }
+    };
+  }
+
+  /* --------------------------------------------------------------------------
+     6. Slide-Over Stage Automation Drawer (Matching Zoho Bigin Parity)
+     -------------------------------------------------------------------------- */
+  async function openStageAutomationDrawer(stageName) {
+    const existing = document.getElementById('soleos-stage-automation-backdrop');
+    if (existing) existing.remove();
+
+    // Fetch existing rule if any
+    let existingRule = {
+      stage: stageName,
+      pipeline: '',
+      enabled: 1,
+      criteria: [],
+      actions: []
+    };
+
+    try {
+      const data = await callApi('soleos.api.get_stage_automations', { stage: stageName });
+      if (data && data.stage) {
+        existingRule = data;
+      }
+    } catch (e) {
+      console.warn('[Soleos CRM] Failed to load existing stage automation:', e);
+    }
+
+    const backdrop = document.createElement('div');
+    backdrop.id = 'soleos-stage-automation-backdrop';
+
+    const drawer = document.createElement('div');
+    drawer.id = 'soleos-stage-automation-drawer';
+
+    drawer.innerHTML = `
+      <div class="soleos-drawer-header">
+        <div class="soleos-drawer-title-row">
+          <h2 class="soleos-drawer-title">Create Stage Automation</h2>
+          <span class="soleos-stage-pill">${stageName}</span>
+        </div>
+        <button class="soleos-drawer-close-btn" id="soleos-close-drawer">✕</button>
+      </div>
+
+      <div class="soleos-drawer-subtitle">
+        The actions you specify in this rule will be executed whenever a Deal enters the stage '<strong>${stageName}</strong>'.
+      </div>
+
+      <div class="soleos-drawer-body">
+        <!-- Criteria Section -->
+        <div>
+          <button class="soleos-criteria-btn" id="soleos-add-criteria-btn">
+            <span>+</span> Add Criteria
+          </button>
+          <div class="soleos-criteria-list" id="soleos-criteria-container"></div>
+        </div>
+
+        <!-- Actions Section -->
+        <div>
+          <h4 class="soleos-section-heading">Actions</h4>
+          <div class="soleos-actions-palette">
+            <div class="soleos-action-trigger" data-action-type="email">
+              <span class="soleos-action-plus">+</span>
+              <span class="soleos-action-title">Send Email</span>
+            </div>
+            <div class="soleos-action-trigger" data-action-type="update_field">
+              <span class="soleos-action-plus">+</span>
+              <span class="soleos-action-title">Update Field</span>
+            </div>
+            <div class="soleos-action-trigger" data-action-type="whatsapp">
+              <span class="soleos-action-plus">+</span>
+              <span class="soleos-action-title">Send Whatsapp Message</span>
+            </div>
+            <div class="soleos-action-trigger" data-action-type="assign_owner">
+              <span class="soleos-action-plus">+</span>
+              <span class="soleos-action-title">Assign Owner</span>
+            </div>
+            <div class="soleos-action-trigger" data-action-type="connected_record">
+              <span class="soleos-action-plus">+</span>
+              <span class="soleos-action-title">Create Connected Record</span>
+            </div>
+            <div class="soleos-action-trigger" data-action-type="webhook">
+              <span class="soleos-action-plus">+</span>
+              <span class="soleos-action-title">Webhooks</span>
+              <span class="soleos-badge-new">New</span>
+            </div>
+            <div class="soleos-action-trigger" data-action-type="activity">
+              <span class="soleos-action-plus">+</span>
+              <span class="soleos-action-title">Create Activity</span>
+              <span class="soleos-action-arrow">›</span>
+            </div>
+            <div class="soleos-action-trigger" data-action-type="zoho_flow">
+              <span class="soleos-action-plus">+</span>
+              <span class="soleos-action-title">Zoho Flow Actions</span>
+            </div>
+            <div class="soleos-action-trigger" data-action-type="tags">
+              <span class="soleos-action-plus">+</span>
+              <span class="soleos-action-title">Tags</span>
+              <span class="soleos-action-arrow">›</span>
+            </div>
+            <div class="soleos-action-trigger" data-action-type="share_deal">
+              <span class="soleos-action-plus">+</span>
+              <span class="soleos-action-title">Share Deal Externally</span>
+              <span class="soleos-action-arrow">›</span>
+            </div>
+          </div>
+
+          <!-- Active Configured Actions List -->
+          <div class="soleos-configured-actions-list" id="soleos-configured-actions-container"></div>
+        </div>
+      </div>
+
+      <div class="soleos-drawer-footer">
+        <button class="soleos-btn-cancel" id="soleos-btn-cancel-drawer">Cancel</button>
+        <button class="soleos-btn-save" id="soleos-btn-save-drawer">Save</button>
+      </div>
+    `;
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(drawer);
+
+    const closeDrawer = () => {
+      drawer.classList.add('closing');
+      backdrop.style.opacity = '0';
+      setTimeout(() => {
+        drawer.remove();
+        backdrop.remove();
+      }, 250);
+    };
+
+    document.getElementById('soleos-close-drawer').onclick = closeDrawer;
+    document.getElementById('soleos-btn-cancel-drawer').onclick = closeDrawer;
+    backdrop.onclick = closeDrawer;
+
+    // --- Criteria Builder ---
+    const criteriaContainer = document.getElementById('soleos-criteria-container');
+    const addCriterionRow = (field = 'project_size_mw', op = '>', val = '1') => {
+      const row = document.createElement('div');
+      row.className = 'soleos-criteria-row';
+      row.innerHTML = `
+        <select class="soleos-criteria-select soleos-crit-field">
+          <option value="project_size_mw" ${field === 'project_size_mw' ? 'selected' : ''}>Project Size (MW)</option>
+          <option value="deal_name" ${field === 'deal_name' ? 'selected' : ''}>Deal Name</option>
+          <option value="territory" ${field === 'territory' ? 'selected' : ''}>Territory</option>
+          <option value="owner" ${field === 'owner' ? 'selected' : ''}>Owner</option>
+          <option value="probability" ${field === 'probability' ? 'selected' : ''}>Probability (%)</option>
+          <option value="india_hq" ${field === 'india_hq' ? 'selected' : ''}>India HQ</option>
+          <option value="lead_source" ${field === 'lead_source' ? 'selected' : ''}>Lead Source</option>
+        </select>
+        <select class="soleos-criteria-select soleos-crit-op">
+          <option value="=" ${op === '=' ? 'selected' : ''}>Equals</option>
+          <option value="!=" ${op === '!=' ? 'selected' : ''}>Not Equals</option>
+          <option value=">" ${op === '>' ? 'selected' : ''}>Greater Than</option>
+          <option value="<" ${op === '<' ? 'selected' : ''}>Less Than</option>
+          <option value="like" ${op === 'like' ? 'selected' : ''}>Contains</option>
+        </select>
+        <input type="text" class="soleos-criteria-input soleos-crit-val" placeholder="Value" value="${val}" style="flex:1;" />
+        <button class="soleos-criteria-remove" title="Remove Criteria">✕</button>
+      `;
+      row.querySelector('.soleos-criteria-remove').onclick = () => row.remove();
+      criteriaContainer.appendChild(row);
+    };
+
+    document.getElementById('soleos-add-criteria-btn').onclick = () => addCriterionRow();
+
+    // Populate existing criteria
+    if (existingRule.criteria && Array.isArray(existingRule.criteria)) {
+      existingRule.criteria.forEach(c => addCriterionRow(c.field, c.operator, c.value));
+    }
+
+    // --- Action Configurations ---
+    const actionsContainer = document.getElementById('soleos-configured-actions-container');
+
+    const addActionCard = (type, config = {}) => {
+      const card = document.createElement('div');
+      card.className = 'soleos-action-card';
+      card.setAttribute('data-action-type', type);
+
+      let title = 'Action';
+      let formHtml = '';
+
+      if (type === 'email') {
+        title = '📧 Send Email';
+        formHtml = `
+          <div class="soleos-card-row">
+            <label>Recipient:</label>
+            <select class="soleos-act-recipient">
+              <option value="contact" ${config.recipient === 'contact' ? 'selected' : ''}>Primary Contact</option>
+              <option value="owner" ${config.recipient === 'owner' ? 'selected' : ''}>Deal Owner</option>
+              <option value="custom" ${config.recipient === 'custom' ? 'selected' : ''}>Custom Email</option>
+            </select>
+          </div>
+          <div class="soleos-card-row">
+            <label>Subject:</label>
+            <input type="text" class="soleos-act-subject" placeholder="Welcome to ${stageName} - Soleos Energy" value="${config.subject || ''}" />
+          </div>
+          <div class="soleos-card-row">
+            <label>Email Body / Template:</label>
+            <textarea class="soleos-act-body" placeholder="Dear Customer, Thank you for partnering with Soleos...">${config.body || ''}</textarea>
+          </div>
+        `;
+      } else if (type === 'update_field') {
+        title = '✏️ Update Field';
+        formHtml = `
+          <div class="soleos-card-row">
+            <label>Field to Update:</label>
+            <select class="soleos-act-field">
+              <option value="probability" ${config.field === 'probability' ? 'selected' : ''}>Probability (%)</option>
+              <option value="project_size_mw" ${config.field === 'project_size_mw' ? 'selected' : ''}>Project Size (MW)</option>
+              <option value="expected_closing" ${config.field === 'expected_closing' ? 'selected' : ''}>Expected Closing Date</option>
+              <option value="territory" ${config.field === 'territory' ? 'selected' : ''}>Territory</option>
+            </select>
+          </div>
+          <div class="soleos-card-row">
+            <label>New Value:</label>
+            <input type="text" class="soleos-act-value" placeholder="e.g. 70" value="${config.value || ''}" />
+          </div>
+        `;
+      } else if (type === 'whatsapp') {
+        title = '💬 Send Whatsapp Message';
+        formHtml = `
+          <div class="soleos-card-row">
+            <label>Recipient:</label>
+            <select class="soleos-act-recipient">
+              <option value="contact" ${config.recipient === 'contact' ? 'selected' : ''}>Primary Contact Mobile</option>
+              <option value="owner" ${config.recipient === 'owner' ? 'selected' : ''}>Deal Owner Mobile</option>
+            </select>
+          </div>
+          <div class="soleos-card-row">
+            <label>WhatsApp Message Template:</label>
+            <textarea class="soleos-act-body" placeholder="Hello {{ contact_name }}, your deal has progressed to stage ${stageName}!">${config.body || ''}</textarea>
+          </div>
+        `;
+      } else if (type === 'assign_owner') {
+        title = '👤 Assign Owner';
+        formHtml = `
+          <div class="soleos-card-row">
+            <label>Select User:</label>
+            <select class="soleos-act-owner">
+              <option value="Administrator" ${config.owner === 'Administrator' ? 'selected' : ''}>Administrator</option>
+              <option value="admin@soleosenergy.com" ${config.owner === 'admin@soleosenergy.com' ? 'selected' : ''}>admin@soleosenergy.com</option>
+            </select>
+          </div>
+        `;
+      } else if (type === 'webhook') {
+        title = '🔗 Webhooks (New)';
+        formHtml = `
+          <div class="soleos-card-row">
+            <label>Webhook URL:</label>
+            <input type="text" class="soleos-act-url" placeholder="https://api.external.com/webhooks/deals" value="${config.url || ''}" />
+          </div>
+          <div class="soleos-card-row">
+            <label>Method:</label>
+            <select class="soleos-act-method">
+              <option value="POST" ${config.method === 'POST' ? 'selected' : ''}>POST (JSON)</option>
+              <option value="GET" ${config.method === 'GET' ? 'selected' : ''}>GET</option>
+            </select>
+          </div>
+        `;
+      } else if (type === 'activity') {
+        title = '📅 Create Activity';
+        formHtml = `
+          <div class="soleos-card-row">
+            <label>Activity Type:</label>
+            <select class="soleos-act-activity-type">
+              <option value="Task" ${config.activity_type === 'Task' ? 'selected' : ''}>Task</option>
+              <option value="Call" ${config.activity_type === 'Call' ? 'selected' : ''}>Call Log</option>
+              <option value="Meeting" ${config.activity_type === 'Meeting' ? 'selected' : ''}>Event / Meeting</option>
+            </select>
+          </div>
+          <div class="soleos-card-row">
+            <label>Title:</label>
+            <input type="text" class="soleos-act-title" placeholder="Follow up on stage ${stageName}" value="${config.title || ''}" />
+          </div>
+        `;
+      } else if (type === 'tags') {
+        title = '🏷️ Add Tags';
+        formHtml = `
+          <div class="soleos-card-row">
+            <label>Tag to attach:</label>
+            <input type="text" class="soleos-act-tag" placeholder="High-Priority-Solar" value="${config.tag || ''}" />
+          </div>
+        `;
+      } else {
+        title = `⚡ ${type.replace('_', ' ').toUpperCase()}`;
+        formHtml = `
+          <div class="soleos-card-row">
+            <label>Action Notes / Parameter:</label>
+            <input type="text" class="soleos-act-custom" placeholder="Parameter value" value="${config.param || ''}" />
+          </div>
+        `;
+      }
+
+      card.innerHTML = `
+        <div class="soleos-action-card-header">
+          <span class="soleos-action-card-title">${title}</span>
+          <button class="soleos-action-card-delete" title="Remove Action">✕</button>
+        </div>
+        ${formHtml}
+      `;
+
+      card.querySelector('.soleos-action-card-delete').onclick = () => card.remove();
+      actionsContainer.appendChild(card);
+    };
+
+    // Attach click triggers for palette
+    document.querySelectorAll('.soleos-action-trigger').forEach(trigger => {
+      trigger.onclick = () => {
+        const type = trigger.getAttribute('data-action-type');
+        addActionCard(type);
+      };
+    });
+
+    // Populate existing actions
+    if (existingRule.actions && Array.isArray(existingRule.actions)) {
+      existingRule.actions.forEach(a => addActionCard(a.type, a.config || {}));
+    }
+
+    // --- Save Button Handler ---
+    document.getElementById('soleos-btn-save-drawer').onclick = async () => {
+      const criteria = [];
+      criteriaContainer.querySelectorAll('.soleos-criteria-row').forEach(row => {
+        const field = row.querySelector('.soleos-crit-field')?.value;
+        const op = row.querySelector('.soleos-crit-op')?.value;
+        const val = row.querySelector('.soleos-crit-val')?.value;
+        if (field) {
+          criteria.push({ field, operator: op, value: val });
+        }
+      });
+
+      const actions = [];
+      actionsContainer.querySelectorAll('.soleos-action-card').forEach(card => {
+        const type = card.getAttribute('data-action-type');
+        const config = {};
+        if (type === 'email') {
+          config.recipient = card.querySelector('.soleos-act-recipient')?.value;
+          config.subject = card.querySelector('.soleos-act-subject')?.value;
+          config.body = card.querySelector('.soleos-act-body')?.value;
+        } else if (type === 'update_field') {
+          config.field = card.querySelector('.soleos-act-field')?.value;
+          config.value = card.querySelector('.soleos-act-value')?.value;
+        } else if (type === 'whatsapp') {
+          config.recipient = card.querySelector('.soleos-act-recipient')?.value;
+          config.body = card.querySelector('.soleos-act-body')?.value;
+        } else if (type === 'assign_owner') {
+          config.owner = card.querySelector('.soleos-act-owner')?.value;
+        } else if (type === 'webhook') {
+          config.url = card.querySelector('.soleos-act-url')?.value;
+          config.method = card.querySelector('.soleos-act-method')?.value;
+        } else if (type === 'activity') {
+          config.activity_type = card.querySelector('.soleos-act-activity-type')?.value;
+          config.title = card.querySelector('.soleos-act-title')?.value;
+        } else if (type === 'tags') {
+          config.tag = card.querySelector('.soleos-act-tag')?.value;
+        } else {
+          config.param = card.querySelector('.soleos-act-custom')?.value;
+        }
+        actions.push({ type, config });
+      });
+
+      try {
+        await callApi('soleos.api.save_stage_automation', {
+          stage: stageName,
+          criteria: criteria,
+          actions: actions,
+          enabled: 1
+        });
+        showToast(`Stage Automation for "${stageName}" saved successfully!`);
+        closeDrawer();
+      } catch (err) {
+        alert('Failed to save automation: ' + (err.message || err));
+      }
+    };
+  }
+
+  /* --------------------------------------------------------------------------
+     7. Click-to-Call & Clickable Contacts
      -------------------------------------------------------------------------- */
   function enhanceContactsAndPhones() {
-    // 1. Phone number strings in text cells
     const phoneRegex = /(?:\+?\d{1,4}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,5}[-.\s]?\d{3,5}/g;
 
     const walker = document.createTreeWalker(
@@ -363,7 +1036,7 @@
           if (!parent) return NodeFilter.FILTER_REJECT;
           const tag = parent.tagName.toLowerCase();
           if (['script', 'style', 'input', 'textarea', 'a', 'button'].includes(tag)) return NodeFilter.FILTER_REJECT;
-          if (parent.closest('.soleos-phone-link, .soleos-call-btn')) return NodeFilter.FILTER_REJECT;
+          if (parent.closest('.soleos-phone-link, .soleos-call-btn, .soleos-criteria-row, .soleos-action-card')) return NodeFilter.FILTER_REJECT;
           return NodeFilter.FILTER_ACCEPT;
         }
       }
@@ -397,7 +1070,6 @@
       }
     });
 
-    // 2. Attach Call button next to phone inputs
     const phoneInputs = document.querySelectorAll('input[type="tel"], input[name*="phone"], input[name*="mobile"]');
     phoneInputs.forEach(input => {
       if (!input.value) return;
@@ -415,7 +1087,6 @@
       parent.appendChild(callBtn);
     });
 
-    // 3. Contact link enhancement in deals/leads
     const contactElements = document.querySelectorAll('[data-contact-name], .contact-cell');
     contactElements.forEach(el => {
       if (el.querySelector('a')) return;
@@ -426,7 +1097,7 @@
   }
 
   /* --------------------------------------------------------------------------
-     6. Navigation & Observer Engine
+     8. Navigation & Observer Engine
      -------------------------------------------------------------------------- */
   function navigateToRoute(route) {
     if (window.history && window.history.pushState) {
@@ -440,10 +1111,13 @@
   function runAllEnhancements() {
     renderActivitiesTaskbar();
     renderDealsViewsDropdown();
+    enhanceKanbanColumns();
     enhanceContactsAndPhones();
   }
 
   // Initial Run
+  fetchStageSummary();
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', runAllEnhancements);
   } else {
@@ -457,7 +1131,7 @@
       throttleTimer = setTimeout(() => {
         throttleTimer = null;
         runAllEnhancements();
-      }, 250);
+      }, 200);
     }
   });
 
