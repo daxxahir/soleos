@@ -1156,7 +1156,38 @@
   }
 
   /* --------------------------------------------------------------------------
-     9. Navigation & Observer Engine
+     9. Hide View "Save Changes" & "Cancel" Filter Buttons (No Need to Save Changes)
+     -------------------------------------------------------------------------- */
+  function hideViewSaveChangesPrompt() {
+    const buttons = document.querySelectorAll('button');
+    buttons.forEach(btn => {
+      const text = (btn.textContent || '').trim();
+      if (text === 'Save Changes') {
+        btn.style.setProperty('display', 'none', 'important');
+        const container = btn.closest('.border-r.pr-2') || btn.parentElement;
+        if (container) {
+          container.style.setProperty('display', 'none', 'important');
+          container.classList.add('soleos-hidden-save-view');
+        }
+      } else if (text === 'Cancel') {
+        const container = btn.closest('.border-r.pr-2');
+        if (container && container.textContent.includes('Save Changes')) {
+          container.style.setProperty('display', 'none', 'important');
+          container.classList.add('soleos-hidden-save-view');
+        }
+      }
+    });
+
+    document.querySelectorAll('.border-r.pr-2, .border-r').forEach(el => {
+      if (el.textContent.includes('Save Changes')) {
+        el.style.setProperty('display', 'none', 'important');
+        el.classList.add('soleos-hidden-save-view');
+      }
+    });
+  }
+
+  /* --------------------------------------------------------------------------
+     10. Navigation & Observer Engine
      -------------------------------------------------------------------------- */
   function navigateToRoute(route) {
     if (window.history && window.history.pushState) {
@@ -1173,6 +1204,7 @@
     enhanceKanbanColumns();
     enhanceContactsAndPhones();
     enhanceCreateDealModal();
+    hideViewSaveChangesPrompt();
   }
 
   // Initial Run

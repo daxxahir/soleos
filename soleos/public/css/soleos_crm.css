@@ -945,3 +945,12 @@
   outline: none !important;
   box-shadow: 0 0 0 1px #10b981 !important;
 }
+
+/* ==========================================================================
+   HIDE 'SAVE CHANGES' & 'CANCEL' PROMPT WHEN FILTERING VIEWS
+   ========================================================================== */
+.soleos-hidden-save-view,
+.border-r.pr-2:has(button) {
+  display: none !important;
+}
+
